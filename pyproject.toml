@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dns-observeX"
+authors = [
+  { name="xavier skip", email="xavierskip@example.com" },
+]
+license = { file = "LICENSE" }
+description = "a simple client to observe dns pollution network situation under Great Firewall."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+[project.scripts]
+dns-observe = "dns_observe.dns:main"
+
+[project.urls]
+"Homepage" = "https://github.com/pypa/sampleproject"
+"Bug Tracker" = "https://github.com/pypa/sampleproject/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "dns_observe.__version__"}

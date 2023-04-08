@@ -1,0 +1,17 @@
+.DS_Store
+.env
+*.pyc
+*.pyo
+env/
+venv/
+.venv/
+env*
+dist/
+build/
+*.egg
+*.egg-info/
+.cache/
+.pytest_cache/
+.idea/
+docs/_build/
+.vscode
