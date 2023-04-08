@@ -4,18 +4,18 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 # DNS query type  
 class QueryType:
-    A = 1   # IPv4
-    AAAA = 28  # IPv6
-    CNAME = 5 # 域名别名
-    NS = 2   # DNS服务器地址
-    PTR = 12 # 指针记录指向另一个名称
-    MX = 15  # 邮件交换记录
-    SOA = 6  # 开始授权记录
-    TXT = 16 # 任意文本信息
+    A      = 1   # IPv4
+    AAAA   = 28  # IPv6
+    CNAME  = 5   # 域名别名
+    NS     = 2   # DNS服务器地址
+    PTR    = 12  # 指针记录指向另一个名称
+    MX     = 15  # 邮件交换记录
+    SOA    = 6   # 开始授权记录
+    TXT    = 16  # 任意文本信息
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -196,7 +196,7 @@ class DNSResourceRecord:
         self.name = None
         self.type = None
         self.ttl = None
-        self.data = None\
+        self.data = None
     
     @property
     def ip_address(self):
