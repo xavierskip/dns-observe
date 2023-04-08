@@ -26,7 +26,7 @@ options:
   -v, --version         show program's version number and exit
 ```
 
-
+python:
 ```python
 from dns_observe import DNSQuery
 dns = DNSQuery('1.1.1.1')
