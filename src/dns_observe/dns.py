@@ -4,7 +4,7 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.0.5"
+__version__ = "0.0.5.1"
 
 # DNS query type  
 class QueryType:
@@ -83,14 +83,18 @@ class DNSQuery:
                     reply = DNS_RCODE.get(code, 'Unassigned')
                     print(f"Time: {now}, Reply code: {reply}({code})")
                 for answer in dns_record.answers:
-                    print(f"Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, Data: {answer.ip_address}")
+                    if answer.type == QueryType.A:
+                        print(f"Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ip_address}")
+                    elif answer.type == QueryType.CNAME:
+                        message = decompression_message(buff, answer.data)
+                        print(f"Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
+                    else:
+                        print(f"Time: {now}, Name: {answer.name}, Other Type!")
             except socket.timeout as err:
                 # print('{} fail'.format(time))
                 pass
 
         return self.queries
-    
-
 
     def _build_request(self, qname, qtype):
         id = 1234
@@ -201,7 +205,22 @@ class DNSResourceRecord:
     @property
     def ip_address(self):
         return  socket.inet_ntoa(self.data)
-    
+
+def parse_message(buff, offset):
+    nlen = buff[offset]
+    parts = []
+    while nlen != 0:
+        parts.append(buff[offset+1:offset+nlen+1])
+        offset += nlen + 1
+        nlen = buff[offset]
+    return '.'.join(map(lambda x: x.decode('utf-8'), parts))
+
+def decompression_message(buff, data):        
+    offset = data[0]
+    if offset & 0b11000000 == 0b11000000:
+        offset =  struct.unpack('>H', data)[0] & 0b111111
+    return parse_message(buff, offset) 
+
 def main():
     # try:
     #     domain = sys.argv[1]
