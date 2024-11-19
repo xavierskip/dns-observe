@@ -27,6 +27,9 @@ options:
 ```
 
 python:
+
+`python -m dns_observe test.net`
+
 ```python
 from dns_observe import DNSQuery
 dns = DNSQuery('1.1.1.1')
