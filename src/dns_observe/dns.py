@@ -82,14 +82,27 @@ class DNSQuery:
                     code = dns_record.flags & 0b1111
                     reply = DNS_RCODE.get(code, 'Unassigned')
                     print(f"Time: {now}, Reply code: {reply}({code})")
-                for answer in dns_record.answers:
+                if len(dns_record.answers) == 1:
+                    single = True
+                if len(dns_record.answers) > 1:
+                    single = False
+                for i,answer in enumerate(dns_record.answers):
+                    if single:
+                        mark = '-'
+                    else: # Unicode block: Box Drawing https://shapecatcher.com/unicode/block/Box_Drawing
+                        if i == 0:
+                            mark = '┌'
+                        elif i == len(dns_record.answers)-1:
+                            mark = '└'
+                        else:
+                            mark = '│'
                     if answer.type == QueryType.A:
-                        print(f"Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ip_address}")
+                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ip_address}")
                     elif answer.type == QueryType.CNAME:
                         message = decompression_message(response, answer.data)
-                        print(f"Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
+                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
                     else:
-                        print(f"Time: {now}, Name: {answer.name}, Other Type!")
+                        print(f"{mark} Time: {now}, Name: {answer.name}, Other Type!")
             except socket.timeout as err:
                 # print('{} fail'.format(time))
                 pass
