@@ -44,8 +44,9 @@ DNS_RCODE = {
 }
 
 class DNSQuery:
-    def __init__(self, server, timeout=2):
+    def __init__(self, server, listen_time=5, timeout=2):
         self._server = server
+        self.listen_time = listen_time # 设置持续监听的时间
         self._TIMEOUT = timeout
         self.queries = []
 
@@ -72,8 +73,7 @@ class DNSQuery:
             raise RuntimeError('DNS request failed: %s' % err)
         
         start_time = time.time()
-        listen_time = 5  # 设置持续监听的时间为5秒
-        while time.time() - start_time < listen_time:
+        while time.time() - start_time < self.listen_time:
             try:
                 response, address = sock.recvfrom(1024)
                 dns_record = self._parse_response(response)
@@ -246,10 +246,10 @@ def main():
         )
     parser.add_argument('domain', help='query domain')
     parser.add_argument('-s','--server', default='1.1.1.1', help='DNS server')
-    parser.add_argument('-w','--wait', default=3, help='wait time')
+    parser.add_argument('-l','--listen', default=5, help='listen time')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
-    dns = DNSQuery(args.server, args.wait)  # 设置 DNS 服务器 IP
+    dns = DNSQuery(args.server, args.listen)  # 设置 DNS 服务器 IP
     querys = dns.query(args.domain)  # 查询记录信息
 
 if __name__ == '__main__':
