@@ -28,7 +28,7 @@ options:
 
 python:
 
-`python -m dns_observe test.net`
+`> python -m dns_observe test.net`
 
 ```python
 from dns_observe import DNSQuery

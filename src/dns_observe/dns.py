@@ -4,7 +4,7 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.0.5.1"
+__version__ = "0.0.5.2"
 
 # DNS query type  
 class QueryType:
@@ -75,8 +75,8 @@ class DNSQuery:
         listen_time = 5  # 设置持续监听的时间为5秒
         while time.time() - start_time < listen_time:
             try:
-                buff, address = sock.recvfrom(1024)
-                dns_record = self._parse_response(buff)
+                response, address = sock.recvfrom(1024)
+                dns_record = self._parse_response(response)
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
                 if len(dns_record.answers) == 0:
                     code = dns_record.flags & 0b1111
@@ -86,7 +86,7 @@ class DNSQuery:
                     if answer.type == QueryType.A:
                         print(f"Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ip_address}")
                     elif answer.type == QueryType.CNAME:
-                        message = decompression_message(buff, answer.data)
+                        message = decompression_message(response, answer.data)
                         print(f"Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
                     else:
                         print(f"Time: {now}, Name: {answer.name}, Other Type!")
@@ -119,15 +119,23 @@ class DNSQuery:
         return header + question
     
     def _parse_name(self, response: bytes, offset: int) -> tuple[str, int]:
-        # print(type(response), type(offset) )
+        # https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4
         nlen = response[offset]
         parts = []
         while nlen != 0:
-            # print(type(response[offset+1:offset+nlen+1]), response[offset+1:offset+nlen+1])
-            parts.append(response[offset+1:offset+nlen+1])
-            offset += nlen + 1
-            nlen = response[offset]
-        return '.'.join(map(lambda x: x.decode('utf-8'), parts)), offset
+            if nlen & 0b11000000 == 0b11000000:
+                (message_compression,) = struct.unpack('>H', response[offset: offset+2])
+                _offset = message_compression & 0b11111111111111
+                p, _set = self._parse_name(response, _offset)  # 递归调用
+                parts.extend(p)                                # list extend
+                offset += 2
+                nlen = 0
+            else:
+                parts.append(response[offset+1:offset+nlen+1]) # list append
+                offset += nlen + 1
+                nlen = response[offset]
+
+        return parts, offset
 
     def _parse_response(self, response):
         dns = DNSRecord()
@@ -153,16 +161,9 @@ class DNSQuery:
             record = DNSResourceRecord()
 
             # 解析域名
-            # print(response[offset:offset+2])
-            # https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4
-            if response[offset] & 0b11000000 == 0b11000000:
-                message_compression = struct.unpack('>H', response[offset: offset+2])[0]
-                name_offset = message_compression & 0b111111
-                record.name, _offset = self._parse_name(response, name_offset)
-                offset += 2
-            else:
-                record.name, _offset = self._parse_name(response, offset)
-                offset = _offset+1
+            name, offset = self._parse_name(response, offset)
+            # print(f"record.name: {names}")
+            record.name = '.'.join(map(lambda x: x.decode('utf-8'), name))
 
             # 解析类型和类
             # print(offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:offset+4] ]))
@@ -206,20 +207,28 @@ class DNSResourceRecord:
     def ip_address(self):
         return  socket.inet_ntoa(self.data)
 
-def parse_message(buff, offset):
-    nlen = buff[offset]
+def decompression_message(buff, data):
     parts = []
+    offset = 0
+    nlen = data[offset]
+    # print("offset", data[0], data)
     while nlen != 0:
-        parts.append(buff[offset+1:offset+nlen+1])
-        offset += nlen + 1
-        nlen = buff[offset]
+        # print("nlen", nlen)
+        if nlen & 0b11000000 == 0b11000000:
+            # buff
+            (message_compression,) = struct.unpack('>H', data[offset: offset+2])
+            _offset =  message_compression & 0b11111111111111
+            nlen = buff[_offset]
+            parts.append(buff[_offset+1:_offset+nlen+1])
+            # offset += 2
+            nlen = 0
+        else:
+            # data
+            parts.append(data[offset+1:offset+nlen+1])
+            offset += nlen + 1
+            nlen = data[offset]
+    # print(f"parts: {parts}")
     return '.'.join(map(lambda x: x.decode('utf-8'), parts))
-
-def decompression_message(buff, data):        
-    offset = data[0]
-    if offset & 0b11000000 == 0b11000000:
-        offset =  struct.unpack('>H', data)[0] & 0b111111
-    return parse_message(buff, offset) 
 
 def main():
     # try:
