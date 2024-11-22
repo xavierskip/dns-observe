@@ -11,7 +11,7 @@ Install and update using [pip](https://pypi.org/project/dns-observe/):
 cli
 ```
 > dns-observe -h
-usage: dns-observe [-h] [-s SERVER] [-w WAIT] [-v] domain
+usage: __main__.py [-h] [-s DNS_SERVER] [-t LISTEN_TIME] [-v] domain
 
 Observing DNS pollution
 
@@ -20,15 +20,16 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  -s SERVER, --server SERVER
+  -s DNS_SERVER, --dns_server DNS_SERVER
                         DNS server (default: 1.1.1.1)
-  -w WAIT, --wait WAIT  wait time (default: 3)
+  -t LISTEN_TIME, --listen_time LISTEN_TIME
+                        listen time (default: 5)
   -v, --version         show program's version number and exit
 ```
 
 python:
 
-`> python -m dns_observe test.net`
+`> python -m dns_observe api.openai.com`
 
 ```python
 from dns_observe import DNSQuery
@@ -38,10 +39,10 @@ dns.query('api.openai.com')
 
 output:
 ```
-Time: 2023-04-08 23:16:19.217111, Name: api.openai.com, TTL: 280, Data: 199.96.61.1
-Time: 2023-04-08 23:16:19.218111, Name: api.openai.com, TTL: 433, Data: 204.79.197.217
-Time: 2023-04-08 23:16:19.358490, Name: api.openai.com, TTL: 7, Data: 104.18.7.192
-Time: 2023-04-08 23:16:19.358490, Name: api.openai.com, TTL: 7, Data: 104.18.6.192
+- Time: 2024-11-22 11:18:16.977688, Name: api.openai.com, TTL: 153, A: 103.56.16.112
+- Time: 2024-11-22 11:18:16.978715, Name: api.openai.com, TTL: 206, A: 192.133.77.145
+┌ Time: 2024-11-22 11:18:17.140652, Name: api.openai.com, TTL: 46, A: 162.159.140.245
+└ Time: 2024-11-22 11:18:17.140652, Name: api.openai.com, TTL: 46, A: 172.66.0.243
 ```
 
 ### How to Packaging Python Projects
