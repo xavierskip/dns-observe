@@ -46,7 +46,7 @@ DNS_RCODE = {
 class DNSQuery:
     def __init__(self, server, listen_time=5, timeout=2):
         self._server = server
-        self.listen_time = listen_time # 设置持续监听的时间
+        self.listen_time = float(listen_time) # 设置持续监听的时间
         self._TIMEOUT = timeout
         self.queries = []
 
@@ -244,25 +244,16 @@ def decompression_message(buff, data):
     return '.'.join(map(lambda x: x.decode('utf-8'), parts))
 
 def main():
-    # try:
-    #     domain = sys.argv[1]
-    # except IndexError:
-    #     domain = 'openai.com'
-    # try:
-    #     dns_server = sys.argv[2]
-    # except IndexError:
-    #     dns_server = '1.1.1.1'
-    
     parser = argparse.ArgumentParser(
         description='Observing DNS pollution',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
     parser.add_argument('domain', help='query domain')
-    parser.add_argument('-s','--server', default='1.1.1.1', help='DNS server')
-    parser.add_argument('-l','--listen', default=5, help='listen time')
+    parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
+    parser.add_argument('-t','--listen_time', default=5, help='listen time')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
-    dns = DNSQuery(args.server, args.listen)  # 设置 DNS 服务器 IP
+    dns = DNSQuery(args.dns_server, args.listen_time)  # 设置 DNS 服务器 IP
     querys = dns.query(args.domain)  # 查询记录信息
 
 if __name__ == '__main__':
