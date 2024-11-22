@@ -4,7 +4,7 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 # DNS query type  
 class QueryType:
