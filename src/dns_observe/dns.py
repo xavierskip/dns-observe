@@ -44,11 +44,12 @@ DNS_RCODE = {
 }
 
 class DNSQuery:
-    def __init__(self, server, listen_time=5, timeout=2):
+    def __init__(self, server='1.1.1.1', listen_time=5, timeout=2):
         self._server = server
         self.listen_time = float(listen_time) # 设置持续监听的时间
-        self._TIMEOUT = timeout
         self.queries = []
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.settimeout(timeout)
 
     def query(self, qname, qtype=QueryType.A):
         """
@@ -66,16 +67,14 @@ class DNSQuery:
         """
         qdata = self._build_request(qname, qtype)
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.settimeout(self._TIMEOUT)
-            sock.sendto(qdata, (self._server, 53))
+            self.sock.sendto(qdata, (self._server, 53))
         except socket.error as err:
             raise RuntimeError('DNS request failed: %s' % err)
         
         start_time = time.time()
         while time.time() - start_time < self.listen_time:
             try:
-                response, address = sock.recvfrom(1024)
+                response, address = self.sock.recvfrom(1024)
                 dns_record = self._parse_response(response)
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
                 if len(dns_record.answers) == 0:
@@ -106,7 +105,7 @@ class DNSQuery:
             except socket.timeout as err:
                 # print('{} fail'.format(time))
                 pass
-
+        self.sock.close()
         return self.queries
 
     def _build_request(self, qname, qtype):
@@ -198,6 +197,12 @@ class DNSQuery:
             dns.answers.append(record)
 
         return dns
+    
+    def close(self):
+        self.sock.close()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
 class DNSRecord:
     def __init__(self):
