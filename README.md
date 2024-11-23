@@ -57,3 +57,11 @@ py -m twine upload --repository testpypi dist/*
 # pypi
 py -m twine upload dist/*
 ```
+
+## dev
+
+`> pip install -e .`
+
+### test
+
+`> python .\tests\test_run.py`
