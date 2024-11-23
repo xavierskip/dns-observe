@@ -4,7 +4,7 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 # DNS query type  
 class QueryType:
@@ -80,7 +80,7 @@ class DNSQuery:
                 if len(dns_record.answers) == 0:
                     code = dns_record.flags & 0b1111
                     reply = DNS_RCODE.get(code, 'Unassigned')
-                    print(f"Time: {now}, Reply code: {reply}({code})")
+                    print(f"Time: {now}, Reply code: {reply}({code}), Answer RRS: 0")
                 if len(dns_record.answers) == 1:
                     single = True
                 if len(dns_record.answers) > 1:
@@ -141,11 +141,13 @@ class DNSQuery:
                 p, _set = self._parse_name(response, _offset)  # 递归调用
                 parts.extend(p)                                # list extend
                 offset += 2
-                nlen = 0
+                nlen = 0  # break
             else:
                 parts.append(response[offset+1:offset+nlen+1]) # list append
                 offset += nlen + 1
                 nlen = response[offset]
+                if nlen == 0:  # offset + 1 before break
+                    offset += 1
 
         return parts, offset
 

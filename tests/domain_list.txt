@@ -1,10 +1,13 @@
 google.com
 google.com.hk
 google.cn
+googlevideo.com
+googleapis.com
+google-analytics.com
+googletagmanager.com
 googleusercontent.com
 ggpht.com
 gstatic.com
-googleapis.com
 facebook.com
 fbcdn.net
 twitter.com
@@ -20,9 +23,5 @@ github.com
 github.io
 disqus.com
 imgur.com
-google.com
-googlevideo.com
-google-analytics.com
-googletagmanager.com
 reddit.com
 redd.it
