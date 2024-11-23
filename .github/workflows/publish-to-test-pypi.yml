@@ -1,3 +1,9 @@
+# > git tag [version]
+# > git push origin [version]
+# https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
+# https://docs.pypi.org/trusted-publishers/using-a-publisher/#github-actions
+# https://docs.github.com/zh/actions/use-cases-and-examples/building-and-testing/building-and-testing-python
+
 name: Publish Python 🐍 distribution 📦 to PyPI and TestPyPI
 
 on: push
