@@ -4,7 +4,7 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
 
 # DNS query type  
 class QueryType:
@@ -47,9 +47,10 @@ class DNSQuery:
     def __init__(self, server='1.1.1.1', listen_time=5, timeout=2):
         self._server = server
         self.listen_time = float(listen_time) # 设置持续监听的时间
+        self.timeout = timeout
         self.queries = []
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(timeout)
+        self.sock = None
+        
 
     def query(self, qname, qtype=QueryType.A):
         """
@@ -67,6 +68,8 @@ class DNSQuery:
         """
         qdata = self._build_request(qname, qtype)
         try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sock.settimeout(self.timeout)
             self.sock.sendto(qdata, (self._server, 53))
         except socket.error as err:
             raise RuntimeError('DNS request failed: %s' % err)
