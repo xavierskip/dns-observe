@@ -14,7 +14,14 @@ class MyTest(unittest.TestCase):
         for d in domains:
             d = d.strip()
             print(f"== {d} ==")
-            dns = DNSQuery()
+            dns = DNSQuery(listen_time=1, timeout=1)
+            dns.query(d)
+    
+    def test_type_AAAA(self):
+        dns = DNSQuery('223.5.5.5')
+        domains = ['taobao.com', 'data.bilibili.com', 'www.qq.com']
+        for d in domains:
+            print(f"== {d} ==")
             dns.query(d)
 
 if __name__ == '__main__':

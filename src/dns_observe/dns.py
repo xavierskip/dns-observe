@@ -99,7 +99,9 @@ class DNSQuery:
                         else:
                             mark = '│'
                     if answer.type == QueryType.A:
-                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ip_address}")
+                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv4_address}")
+                    elif answer.type == QueryType.AAAA:
+                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv6_address}")
                     elif answer.type == QueryType.CNAME:
                         message = decompression_message(response, answer.data)
                         print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
@@ -227,8 +229,12 @@ class DNSResourceRecord:
         self.data = None
     
     @property
-    def ip_address(self):
-        return  socket.inet_ntoa(self.data)
+    def ipv4_address(self):
+        return  socket.inet_ntop(socket.AF_INET, self.data)
+    
+    @property
+    def ipv6_address(self):
+        return  socket.inet_ntop(socket.AF_INET6, self.data)
 
 def decompression_message(buff, data):
     parts = []
