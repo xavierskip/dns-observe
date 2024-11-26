@@ -1,4 +1,4 @@
-[![publish](https://github.com/xavierskip/dns-observe/actions/workflows/publish-to-test-pypi.yml/badge.svg)](https://github.com/xavierskip/dns-observe/actions) [![PyPI version](https://badge.fury.io/py/dns-observe.svg?icon=si%3Apython)](https://badge.fury.io/py/dns-observe)
+[![publish](https://github.com/xavierskip/dns-observe/actions/workflows/publish-to-test-pypi.yml/badge.svg?event=push)](https://github.com/xavierskip/dns-observe/actions) [![PyPI version](https://badge.fury.io/py/dns-observe.svg?icon=si%3Apython)](https://badge.fury.io/py/dns-observe)
 
 # dns-observe
 a simple client to observe dns pollution network situation under The Great Firewall of China.
