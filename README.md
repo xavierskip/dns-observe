@@ -1,6 +1,6 @@
-[![CI](https://github.com/xavierskip/dns-observe/workflows/CI/badge.svg)](https://github.com/xavierskip/dns-observe/actions?query=workflow%3ACI) [![PyPI version](https://badge.fury.io/py/dns-observe.svg?icon=si%3Apython)](https://badge.fury.io/py/dns-observe)
+[![publish](https://github.com/xavierskip/dns-observe/actions/workflows/publish-to-test-pypi.yml/badge.svg)](https://github.com/xavierskip/dns-observe/actions) [![PyPI version](https://badge.fury.io/py/dns-observe.svg?icon=si%3Apython)](https://badge.fury.io/py/dns-observe)
 
-## dns-observe
+# dns-observe
 a simple client to observe dns pollution network situation under The Great Firewall of China.
 
 So far, only type A DNS queries have been implemented.

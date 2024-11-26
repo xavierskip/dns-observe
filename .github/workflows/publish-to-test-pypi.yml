@@ -4,7 +4,7 @@
 # https://docs.pypi.org/trusted-publishers/using-a-publisher/#github-actions
 # https://docs.github.com/zh/actions/use-cases-and-examples/building-and-testing/building-and-testing-python
 
-name: Publish Python 🐍 distribution 📦 to PyPI and TestPyPI
+name: Publish to PyPI
 
 on: push
 
