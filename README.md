@@ -13,7 +13,7 @@ Install and update using [pip](https://pypi.org/project/dns-observe/):
 cli
 ```
 > dns-observe -h
-usage: __main__.py [-h] [-s DNS_SERVER] [-t LISTEN_TIME] [-v] domain
+usage: dns-observe [-h] [-s DNS_SERVER] [-t LISTEN_TIME] [-v] domain
 
 Observing DNS pollution
 
@@ -34,9 +34,10 @@ python:
 `> python -m dns_observe api.openai.com`
 
 ```python
-from dns_observe import DNSQuery
+from dns_observe import DNSQuery, QueryType
 dns = DNSQuery('1.1.1.1')
 dns.query('api.openai.com')
+dns.query('claude.ai', QueryType.AAAA)
 ```
 
 output:

@@ -1,5 +1,5 @@
 import unittest
-from dns_observe import DNSQuery
+from dns_observe import DNSQuery, QueryType
 import os
 from pathlib import Path
 
@@ -22,7 +22,7 @@ class MyTest(unittest.TestCase):
         domains = ['taobao.com', 'data.bilibili.com', 'www.qq.com']
         for d in domains:
             print(f"== {d} ==")
-            dns.query(d)
+            dns.query(d, QueryType.AAAA)
 
 if __name__ == '__main__':
     unittest.main()            
