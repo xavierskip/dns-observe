@@ -4,10 +4,10 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.6.3"
+__version__ = "0.6.4"
 
 # DNS query type  
-class QueryType:
+class RecordType:
     A      = 1   # IPv4
     AAAA   = 28  # IPv6
     CNAME  = 5   # 域名别名
@@ -16,6 +16,27 @@ class QueryType:
     MX     = 15  # 邮件交换记录
     SOA    = 6   # 开始授权记录
     TXT    = 16  # 任意文本信息
+
+class UnsupportTypeError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+    def __str__(self):
+        return f"'{self.message}' is unsupport type: "
+
+def query_type(qtype):
+        """ q: support query type
+        """
+        q = {
+            'A'   : RecordType.A,
+            'AAAA': RecordType.AAAA
+        }
+        try:
+            return q[qtype]
+        except KeyError as exc:
+            raise UnsupportTypeError(qtype) from exc
+
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -52,7 +73,7 @@ class DNSQuery:
         self.sock = None
         
 
-    def query(self, qname, qtype=QueryType.A):
+    def query(self, qname, qtype=RecordType.A):
         """
         向指定 DNS 服务器查询 DNS 记录
 
@@ -98,11 +119,11 @@ class DNSQuery:
                             mark = '└'
                         else:
                             mark = '│'
-                    if answer.type == QueryType.A:
+                    if answer.type == RecordType.A:
                         print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv4_address}")
-                    elif answer.type == QueryType.AAAA:
+                    elif answer.type == RecordType.AAAA:
                         print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv6_address}")
-                    elif answer.type == QueryType.CNAME:
+                    elif answer.type == RecordType.CNAME:
                         message = decompression_message(response, answer.data)
                         print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
                     else:
@@ -266,11 +287,12 @@ def main():
         )
     parser.add_argument('domain', help='query domain')
     parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
-    parser.add_argument('-t','--listen_time', default=5, help='listen time')
+    parser.add_argument('-q', '--query_type', default='A', choices=['A', 'AAAA'], help="DNS record type")
+    parser.add_argument('-t','--listen_time', default=5, help='socket listen time')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
     dns = DNSQuery(args.dns_server, args.listen_time)  # 设置 DNS 服务器 IP
-    querys = dns.query(args.domain)  # 查询记录信息
+    querys = dns.query(args.domain, qtype=query_type(args.query_type))  # 查询记录信息
 
 if __name__ == '__main__':
     main()

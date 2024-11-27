@@ -34,10 +34,10 @@ python:
 `> python -m dns_observe api.openai.com`
 
 ```python
-from dns_observe import DNSQuery, QueryType
+from dns_observe import DNSQuery, RecordType
 dns = DNSQuery('1.1.1.1')
 dns.query('api.openai.com')
-dns.query('claude.ai', QueryType.AAAA)
+dns.query('claude.ai', RecordType.AAAA)
 ```
 
 output:
