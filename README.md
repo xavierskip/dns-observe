@@ -67,4 +67,4 @@ py -m twine upload dist/*
 
 ### test
 
-`> python .\tests\test_run.py`
+`> python tests/test_run.py`

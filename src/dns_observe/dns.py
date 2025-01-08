@@ -1,43 +1,12 @@
+from __future__ import annotations
 import socket
 import struct
 import time
 import datetime
 import argparse
-from typing import Tuple
+# from typing import Tuple
 
-__version__ = "0.6.4"
-
-# DNS query type  
-class RecordType:
-    A      = 1   # IPv4
-    AAAA   = 28  # IPv6
-    CNAME  = 5   # 域名别名
-    NS     = 2   # DNS服务器地址
-    PTR    = 12  # 指针记录指向另一个名称
-    MX     = 15  # 邮件交换记录
-    SOA    = 6   # 开始授权记录
-    TXT    = 16  # 任意文本信息
-
-class UnsupportTypeError(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(message)
-
-    def __str__(self):
-        return f"'{self.message}' is unsupport type: "
-
-def query_type(qtype):
-        """ q: support query type
-        """
-        q = {
-            'A'   : RecordType.A,
-            'AAAA': RecordType.AAAA
-        }
-        try:
-            return q[qtype]
-        except KeyError as exc:
-            raise UnsupportTypeError(qtype) from exc
-
+__version__ = "0.6.5"
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -65,16 +34,93 @@ DNS_RCODE = {
     23: "Bad/missing Server Cookie"
 }
 
+class UnsupportTypeError(Exception):
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
+
+    def __str__(self):
+        return f"'{self.message}' is unsupport type: "
+# DNS query type  
+class RecordType:
+    A      = 1   # IPv4
+    AAAA   = 28  # IPv6
+    CNAME  = 5   # 域名别名
+    NS     = 2   # DNS服务器地址
+    PTR    = 12  # 指针记录指向另一个名称
+    MX     = 15  # 邮件交换记录
+    SOA    = 6   # 开始授权记录
+    TXT    = 16  # 任意文本信息
+
+def query_type(qtype: str) -> int:
+        """ q: support query type
+        """
+        q = {
+            'A'   : RecordType.A,
+            'AAAA': RecordType.AAAA
+        }
+        try:
+            return q[qtype]
+        except KeyError as exc:
+            raise UnsupportTypeError(qtype) from exc
+
+def decompression_message(buff: bytes, data: bytes) -> str:
+    parts = []
+    offset = 0
+    nlen = data[offset]
+    # print("offset", data[0], data)
+    while nlen != 0:
+        # print("nlen", nlen)
+        if nlen & 0b11000000 == 0b11000000:
+            # buff
+            (message_compression,) = struct.unpack('>H', data[offset: offset+2])
+            _offset =  message_compression & 0b11111111111111
+            nlen = buff[_offset]
+            parts.append(buff[_offset+1:_offset+nlen+1])
+            # offset += 2
+            nlen = 0
+        else:
+            # data
+            parts.append(data[offset+1:offset+nlen+1])
+            offset += nlen + 1
+            nlen = data[offset]
+    # print(f"parts: {parts}")
+    return '.'.join(map(lambda x: x.decode('utf-8'), parts))
+
+class DNSRecord:
+    def __init__(self):
+        self.id = None
+        self.flags = None
+        self.questions = None
+        self.answers = []
+        self.authoritative = None
+        self.additional = None
+
+class DNSResourceRecord:
+    def __init__(self):
+        self.class_ = None
+        self.name = None
+        self.type = None
+        self.ttl = None
+        self.data = None
+    
+    @property
+    def ipv4_address(self):
+        return  socket.inet_ntop(socket.AF_INET, self.data)
+    
+    @property
+    def ipv6_address(self):
+        return  socket.inet_ntop(socket.AF_INET6, self.data)
+
 class DNSQuery:
     def __init__(self, server='1.1.1.1', listen_time=5, timeout=2):
         self._server = server
         self.listen_time = float(listen_time) # 设置持续监听的时间
         self.timeout = timeout
         self.queries = []
-        self.sock = None
-        
+        self.sock = None        
 
-    def query(self, qname, qtype=RecordType.A):
+    def query(self, qname: str, qtype=RecordType.A):
         """
         向指定 DNS 服务器查询 DNS 记录
 
@@ -135,7 +181,7 @@ class DNSQuery:
         self.sock.close()
         return self.queries
 
-    def _build_request(self, qname, qtype):
+    def _build_request(self, qname: str, qtype: int) -> bytes:
         id = 1234
         flag = 0x0100
         qdcount = 1
@@ -157,7 +203,7 @@ class DNSQuery:
 
         return header + question
     
-    def _parse_name(self, response: bytes, offset: int) -> Tuple[str, int]:
+    def _parse_name(self, response: bytes, offset: int) -> tuple[str, int]:
         # https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4
         nlen = response[offset]
         parts = []
@@ -178,7 +224,7 @@ class DNSQuery:
 
         return parts, offset
 
-    def _parse_response(self, response):
+    def _parse_response(self, response: bytes) -> DNSRecord:
         dns = DNSRecord()
         dns.id = struct.unpack('>H', response[:2])[0]
         dns.flags = struct.unpack('>H', response[2:4])[0]
@@ -232,54 +278,6 @@ class DNSQuery:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
-
-class DNSRecord:
-    def __init__(self):
-        self.id = None
-        self.flags = None
-        self.questions = None
-        self.answers = []
-        self.authoritative = None
-        self.additional = None
-
-class DNSResourceRecord:
-    def __init__(self):
-        self.class_ = None
-        self.name = None
-        self.type = None
-        self.ttl = None
-        self.data = None
-    
-    @property
-    def ipv4_address(self):
-        return  socket.inet_ntop(socket.AF_INET, self.data)
-    
-    @property
-    def ipv6_address(self):
-        return  socket.inet_ntop(socket.AF_INET6, self.data)
-
-def decompression_message(buff, data):
-    parts = []
-    offset = 0
-    nlen = data[offset]
-    # print("offset", data[0], data)
-    while nlen != 0:
-        # print("nlen", nlen)
-        if nlen & 0b11000000 == 0b11000000:
-            # buff
-            (message_compression,) = struct.unpack('>H', data[offset: offset+2])
-            _offset =  message_compression & 0b11111111111111
-            nlen = buff[_offset]
-            parts.append(buff[_offset+1:_offset+nlen+1])
-            # offset += 2
-            nlen = 0
-        else:
-            # data
-            parts.append(data[offset+1:offset+nlen+1])
-            offset += nlen + 1
-            nlen = data[offset]
-    # print(f"parts: {parts}")
-    return '.'.join(map(lambda x: x.decode('utf-8'), parts))
 
 def main():
     parser = argparse.ArgumentParser(
