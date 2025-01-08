@@ -3,6 +3,7 @@ import struct
 import time
 import datetime
 import argparse
+from typing import Tuple
 
 __version__ = "0.6.4"
 
@@ -156,7 +157,7 @@ class DNSQuery:
 
         return header + question
     
-    def _parse_name(self, response: bytes, offset: int) -> tuple[str, int]:
+    def _parse_name(self, response: bytes, offset: int) -> Tuple[str, int]:
         # https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4
         nlen = response[offset]
         parts = []
