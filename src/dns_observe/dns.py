@@ -4,40 +4,8 @@ import struct
 import time
 import datetime
 import argparse
-# from typing import Tuple
 
 __version__ = "0.7"
-
-# DNS query type  
-class RecordType:
-    A      = 1   # IPv4
-    AAAA   = 28  # IPv6
-    CNAME  = 5   # 域名别名
-    NS     = 2   # DNS服务器地址
-    PTR    = 12  # 指针记录指向另一个名称
-    MX     = 15  # 邮件交换记录
-    SOA    = 6   # 开始授权记录
-    TXT    = 16  # 任意文本信息
-
-class UnsupportTypeError(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(message)
-
-    def __str__(self):
-        return f"'{self.message}' is unsupport type: "
-
-def query_type(qtype) -> int :
-        """ q: support query type
-        """
-        q = {
-            'A'   : RecordType.A,
-            'AAAA': RecordType.AAAA
-        }
-        try:
-            return q[qtype]
-        except KeyError as exc:
-            raise UnsupportTypeError(qtype) from exc
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -64,6 +32,41 @@ DNS_RCODE = {
     22: "Bad Truncation",
     23: "Bad/missing Server Cookie"
 }
+# DNS query type  
+class RecordType:
+    A      = 1   # IPv4
+    AAAA   = 28  # IPv6
+    CNAME  = 5   # 域名别名
+    NS     = 2   # DNS服务器地址
+    PTR    = 12  # 指针记录指向另一个名称
+    MX     = 15  # 邮件交换记录
+    SOA    = 6   # 开始授权记录
+    TXT    = 16  # 任意文本信息
+    HTTPS  = 65  
+
+QTYPE = {
+    'A'   :  RecordType.A,
+    'AAAA':  RecordType.AAAA,
+    'CNAME': RecordType.CNAME,
+    'TXT':   RecordType.TXT,
+    'HTTPS': RecordType.HTTPS,
+}
+
+class UnsupportTypeError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+    def __str__(self):
+        return f"'{self.message}' is unsupport type: "
+
+def query_type(qtype) -> int :
+        """ QTYPE: support query type
+        """
+        try:
+            return QTYPE[qtype]
+        except KeyError as exc:
+            raise UnsupportTypeError(qtype) from exc
 
 class DNSQuery:
     def __init__(self, server='1.1.1.1', listen_time=5, timeout=2):
@@ -127,6 +130,9 @@ class DNSQuery:
                     elif answer.type == RecordType.CNAME:
                         message = decompression_message(response, answer.data)
                         print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
+                    elif answer.type == RecordType.HTTPS:
+                        message = decompression_message(response, answer.data)
+                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, HTTPS: {message}")
                     else:
                         print(f"{mark} Time: {now}, Name: {answer.name}, Other Type!")
             except socket.timeout as err:
@@ -288,12 +294,12 @@ def main():
         )
     parser.add_argument('domain', help='query domain')
     parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
-    parser.add_argument('-q', '--query_type', default='A', choices=['A', 'AAAA'], help="DNS record type")
+    parser.add_argument('-q', '--query_type', default='A', choices=QTYPE.keys(), help="DNS record type")
     parser.add_argument('-t','--listen_time', default=5, help='socket listen time')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
     dns = DNSQuery(args.dns_server, args.listen_time)  # 设置 DNS 服务器 IP
-    querys = dns.query(args.domain, qtype=query_type(args.query_type))  # 查询记录信息
+    dns.query(args.domain, qtype=query_type(args.query_type))  # 查询记录信息
 
 if __name__ == '__main__':
     main()
