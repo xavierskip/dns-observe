@@ -1,8 +1,10 @@
+from __future__ import annotations
 import socket
 import struct
 import time
 import datetime
 import argparse
+# from typing import Tuple
 
 __version__ = "0.7"
 
@@ -25,7 +27,7 @@ class UnsupportTypeError(Exception):
     def __str__(self):
         return f"'{self.message}' is unsupport type: "
 
-def query_type(qtype):
+def query_type(qtype) -> int :
         """ q: support query type
         """
         q = {
@@ -36,7 +38,6 @@ def query_type(qtype):
             return q[qtype]
         except KeyError as exc:
             raise UnsupportTypeError(qtype) from exc
-
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -70,9 +71,8 @@ class DNSQuery:
         self.listen_time = float(listen_time) # 设置持续监听的时间
         self.timeout = timeout
         self.sock = None
-        
 
-    def query(self, qname, qtype=RecordType.A):
+    def query(self, qname: str, qtype=RecordType.A) -> list[DNSMessage]:
         """
         向指定 DNS 服务器查询 DNS 记录
 
@@ -135,7 +135,7 @@ class DNSQuery:
         self.sock.close()
         return answers
 
-    def _build_request(self, qname, qtype):
+    def _build_request(self, qname: str, qtype: int) -> bytes:
         id = 1234
         flag = 0x0100
         qdcount = 1
@@ -178,7 +178,7 @@ class DNSQuery:
 
         return parts, offset
 
-    def _parse_response(self, response):
+    def _parse_response(self, response) -> DNSMessage:
         dns = DNSMessage()
         dns.id = struct.unpack('>H', response[:2])[0]
         dns.flags = struct.unpack('>H', response[2:4])[0]
@@ -258,7 +258,7 @@ class DNSResourceRecord:
     def ipv6_address(self):
         return  socket.inet_ntop(socket.AF_INET6, self.data)
 
-def decompression_message(buff, data):
+def decompression_message(buff: bytes, data: bytes) -> str:
     parts = []
     offset = 0
     nlen = data[offset]
