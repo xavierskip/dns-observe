@@ -4,7 +4,7 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.6.4"
+__version__ = "0.7"
 
 # DNS query type  
 class RecordType:
@@ -69,7 +69,6 @@ class DNSQuery:
         self._server = server
         self.listen_time = float(listen_time) # 设置持续监听的时间
         self.timeout = timeout
-        self.queries = []
         self.sock = None
         
 
@@ -87,6 +86,7 @@ class DNSQuery:
         Raises:
             - RuntimeError: 当 DNS 请求失败时抛出运行时错误
         """
+        answers = []
         qdata = self._build_request(qname, qtype)
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -99,23 +99,24 @@ class DNSQuery:
         while time.time() - start_time < self.listen_time:
             try:
                 response, address = self.sock.recvfrom(1024)
-                dns_record = self._parse_response(response)
+                dns_msg = self._parse_response(response)
+                answers.append(dns_msg)
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-                if len(dns_record.answers) == 0:
-                    code = dns_record.flags & 0b1111
+                if len(dns_msg.answers) == 0:
+                    code = dns_msg.flags & 0b1111
                     reply = DNS_RCODE.get(code, 'Unassigned')
                     print(f"Time: {now}, Reply code: {reply}({code}), Answer RRS: 0")
-                if len(dns_record.answers) == 1:
+                if len(dns_msg.answers) == 1:
                     single = True
-                if len(dns_record.answers) > 1:
+                if len(dns_msg.answers) > 1:
                     single = False
-                for i,answer in enumerate(dns_record.answers):
+                for i,answer in enumerate(dns_msg.answers):
                     if single:
                         mark = '-'
                     else: # Unicode block: Box Drawing https://shapecatcher.com/unicode/block/Box_Drawing
                         if i == 0:
                             mark = '┌'
-                        elif i == len(dns_record.answers)-1:
+                        elif i == len(dns_msg.answers)-1:
                             mark = '└'
                         else:
                             mark = '│'
@@ -132,7 +133,7 @@ class DNSQuery:
                 # print('{} fail'.format(time))
                 pass
         self.sock.close()
-        return self.queries
+        return answers
 
     def _build_request(self, qname, qtype):
         id = 1234
@@ -178,7 +179,7 @@ class DNSQuery:
         return parts, offset
 
     def _parse_response(self, response):
-        dns = DNSRecord()
+        dns = DNSMessage()
         dns.id = struct.unpack('>H', response[:2])[0]
         dns.flags = struct.unpack('>H', response[2:4])[0]
         dns.questions= struct.unpack('>H', response[4:6])[0]
@@ -232,7 +233,7 @@ class DNSQuery:
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
-class DNSRecord:
+class DNSMessage:
     def __init__(self):
         self.id = None
         self.flags = None
