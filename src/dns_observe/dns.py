@@ -5,7 +5,7 @@ import time
 import datetime
 import argparse
 
-__version__ = "0.7"
+__version__ = "0.6.6"
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -126,7 +126,7 @@ class DNSQuery:
                     if answer.type == RecordType.A:
                         print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv4_address}")
                     elif answer.type == RecordType.AAAA:
-                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv6_address}")
+                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, AAAA: {answer.ipv6_address}")
                     elif answer.type == RecordType.CNAME:
                         message = decompression_message(response, answer.data)
                         print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
@@ -300,6 +300,13 @@ def main():
     args = parser.parse_args()
     dns = DNSQuery(args.dns_server, args.listen_time)  # 设置 DNS 服务器 IP
     dns.query(args.domain, qtype=query_type(args.query_type))  # 查询记录信息
+
+def console_script():
+    """CLI entry point with KeyboardInterrupt handling"""
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nInterrupted by user!")
 
 if __name__ == '__main__':
     main()

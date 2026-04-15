@@ -1,3 +1,3 @@
-from .dns import main
+from .dns import console_script
 
-main()
+console_script()

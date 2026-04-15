@@ -19,7 +19,7 @@ classifiers = [
 dynamic = ["version"]
 
 [project.scripts]
-dns-observe = "dns_observe.dns:main"
+dns-observe = "dns_observe.dns:console_script"
 
 [project.urls]
 "Homepage" = "https://github.com/xavierskip/dns-observe"
