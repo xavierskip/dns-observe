@@ -3,7 +3,24 @@
 # dns-observe
 a simple client to observe dns pollution network situation under The Great Firewall of China.
 
-So far, only type A DNS queries have been implemented.
+## Features
+
+- Pure Python implementation with no third-party dependencies
+- Uses raw UDP sockets and implements DNS protocol parsing per RFC 1035
+- Listens continuously for a configurable time window to capture multiple responses
+- Box-drawing character output for visually grouping multiple answers
+
+## Supported Query Types
+
+| Type  | Status | Description |
+|-------|--------|-------------|
+| A     | ✅ Supported | IPv4 address records |
+| AAAA  | ✅ Supported | IPv6 address records |
+| CNAME | ✅ Supported | Canonical name records |
+| TXT   | 📝 Planned | Text records |
+| HTTPS | 📝 Planned | HTTPS service binding records |
+| NS    | 📝 Planned | Name server records |
+| MX    | 📝 Planned | Mail exchange records |
 
 ## Installing
 Install and update using [pip](https://pypi.org/project/dns-observe/):
@@ -13,7 +30,7 @@ Install and update using [pip](https://pypi.org/project/dns-observe/):
 cli
 ```
 > dns-observe -h
-usage: dns-observe [-h] [-s DNS_SERVER] [-t LISTEN_TIME] [-v] domain
+usage: dns-observe [-h] [-s DNS_SERVER] [-q {A,AAAA,CNAME,TXT,HTTPS}] [-t LISTEN_TIME] [-v] domain
 
 Observing DNS pollution
 
@@ -22,10 +39,12 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  -s DNS_SERVER, --dns_server DNS_SERVER
+  -s, --dns_server DNS_SERVER
                         DNS server (default: 1.1.1.1)
-  -t LISTEN_TIME, --listen_time LISTEN_TIME
-                        listen time (default: 5)
+  -q, --query_type {A,AAAA,CNAME,TXT,HTTPS}
+                        DNS record type (default: A)
+  -t, --listen_time LISTEN_TIME
+                        socket listen time (default: 5)
   -v, --version         show program's version number and exit
 ```
 
