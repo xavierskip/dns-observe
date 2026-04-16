@@ -4,8 +4,10 @@ import struct
 import time
 import datetime
 import argparse
+import threading
+import sys
 
-__version__ = "0.6.6"
+__version__ = "0.7.0"
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -74,6 +76,8 @@ class DNSQuery:
         self.listen_time = float(listen_time) # 设置持续监听的时间
         self.timeout = timeout
         self.sock = None
+        self.stdout_msg = []
+        self._msg_lock = threading.Lock()
 
     def query(self, qname: str, qtype=RecordType.A) -> list[DNSMessage]:
         """
@@ -104,11 +108,14 @@ class DNSQuery:
                 response, address = self.sock.recvfrom(1024)
                 dns_msg = self._parse_response(response)
                 answers.append(dns_msg)
+                # use for stdout message
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
                 if len(dns_msg.answers) == 0:
                     code = dns_msg.flags & 0b1111
                     reply = DNS_RCODE.get(code, 'Unassigned')
-                    print(f"Time: {now}, Reply code: {reply}({code}), Answer RRS: 0")
+                    stdout = f"Time: {now}, Reply code: {reply}({code}), Answer RRS: 0"
+                    with self._msg_lock:
+                        self.stdout_msg.append(stdout)
                 if len(dns_msg.answers) == 1:
                     single = True
                 if len(dns_msg.answers) > 1:
@@ -124,17 +131,20 @@ class DNSQuery:
                         else:
                             mark = '│'
                     if answer.type == RecordType.A:
-                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv4_address}")
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv4_address}"
                     elif answer.type == RecordType.AAAA:
-                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, AAAA: {answer.ipv6_address}")
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, AAAA: {answer.ipv6_address}"
                     elif answer.type == RecordType.CNAME:
                         message = decompression_message(response, answer.data)
-                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}")
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}"
                     elif answer.type == RecordType.HTTPS:
                         message = decompression_message(response, answer.data)
-                        print(f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, HTTPS: {message}")
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, HTTPS: {message}"
                     else:
-                        print(f"{mark} Time: {now}, Name: {answer.name}, Other Type!")
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, Other Type!"
+                    
+                    with self._msg_lock:
+                        self.stdout_msg.append(stdout)
             except socket.timeout as err:
                 # print('{} fail'.format(time))
                 pass
@@ -294,12 +304,19 @@ def main():
         )
     parser.add_argument('domain', help='query domain')
     parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
-    parser.add_argument('-q', '--query_type', default='A', choices=QTYPE.keys(), help="DNS record type")
-    parser.add_argument('-t','--listen_time', default=5, help='socket listen time')
+    parser.add_argument('-q', '--query_type', type=str.upper, default='A', choices=QTYPE.keys(), help="DNS record type")
+    parser.add_argument('-t','--listen_time', type=float, default=5, help='socket listen time')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
     dns = DNSQuery(args.dns_server, args.listen_time)  # 设置 DNS 服务器 IP
-    dns.query(args.domain, qtype=query_type(args.query_type))  # 查询记录信息
+    from .console import Spinner
+    has_time_arg = '-t' in sys.argv or '--listen_time' in sys.argv # 判断是否提供了 listen_time 参数
+    if has_time_arg:
+        with Spinner(dns, countdown=args.listen_time) as _:     # 有倒计时
+            dns.query(args.domain, qtype=query_type(args.query_type))
+    else:
+        with Spinner(dns) as _:                                 # 无倒计时
+            dns.query(args.domain, qtype=query_type(args.query_type))
 
 def console_script():
     """CLI entry point with KeyboardInterrupt handling"""
