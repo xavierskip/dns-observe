@@ -42,11 +42,11 @@ python -m dns_observe <domain>
 **Single-module package** (`src/dns_observe/dns.py`):
 
 - **`DNSQuery`**: Main class for sending DNS queries and collecting responses
-  - `query(qname, qtype)`: Sends query and listens for `listen_time` seconds (default: 5), collecting all responses
+  - `query(qname, qtype)`: Sends query and listens for `wait_time` seconds (default: 5), collecting all responses
   - Uses UDP socket with configurable timeout
   - Outputs formatted results with box-drawing characters for multiple answers
 
-- **`DNSMessage`**: Parsed DNS response container with header fields and answer list
+- **`DNSResponse`**: Parsed DNS response container with header fields and answer list
 
 - **`DNSResourceRecord`**: Individual DNS record with properties `ipv4_address` and `ipv6_address`
 
@@ -57,4 +57,4 @@ python -m dns_observe <domain>
 - Response parsing: `_parse_response()` handles name decompression (RFC 1035 §4.1.4), supports message compression pointers (0b11 prefix)
 - Name parsing: `_parse_name()` recursively resolves compression pointers
 
-**Key design**: The `query()` method listens continuously for the full `listen_time` duration, capturing multiple responses to detect DNS pollution scenarios where conflicting answers may arrive.
+**Key design**: The `query()` method listens continuously for the full `wait_time` duration, capturing multiple responses to detect DNS pollution scenarios where conflicting answers may arrive.

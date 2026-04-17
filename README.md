@@ -43,8 +43,8 @@ options:
                         DNS server (default: 1.1.1.1)
   -q, --query_type {A,AAAA,CNAME,TXT,HTTPS}
                         DNS record type (default: A)
-  -t, --listen_time LISTEN_TIME
-                        socket listen time (default: 5)
+  -t, --wait_time WAIT_TIME
+                        socket reception duration in seconds (default: 5)
   -v, --version         show program's version number and exit
 ```
 

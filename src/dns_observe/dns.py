@@ -6,8 +6,9 @@ import datetime
 import argparse
 import threading
 import sys
+import random
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
@@ -54,6 +55,9 @@ QTYPE = {
     'HTTPS': RecordType.HTTPS,
 }
 
+# 反向查找：数值 -> 类型名称
+QTYPE_NAME = {v: k for k, v in QTYPE.items()}
+
 class UnsupportTypeError(Exception):
     def __init__(self, message):
         self.message = message
@@ -62,7 +66,7 @@ class UnsupportTypeError(Exception):
     def __str__(self):
         return f"'{self.message}' is unsupport type: "
 
-def query_type(qtype) -> int :
+def query_type(qtype: str) -> int:
         """ QTYPE: support query type
         """
         try:
@@ -71,15 +75,16 @@ def query_type(qtype) -> int :
             raise UnsupportTypeError(qtype) from exc
 
 class DNSQuery:
-    def __init__(self, server='1.1.1.1', listen_time=5, timeout=2):
+    def __init__(self, server='1.1.1.1', wait_time=5, timeout=3, transaction_id=0):
         self._server = server
-        self.listen_time = float(listen_time) # 设置持续监听的时间
-        self.timeout = timeout
+        self.wait_time = float(wait_time)     # 设置持续监听的时间
+        self.timeout = timeout                # 设置 socket 超时时间
+        self.transaction_id = transaction_id  # 默认值0则随机生成 transaction ID，用户也可以指定一个固定的 ID 以便于追踪
         self.sock = None
         self.stdout_msg = []
         self._msg_lock = threading.Lock()
 
-    def query(self, qname: str, qtype=RecordType.A) -> list[DNSMessage]:
+    def query(self, qname: str, qtype=RecordType.A) -> list[DNSResponse]:
         """
         向指定 DNS 服务器查询 DNS 记录
 
@@ -103,7 +108,7 @@ class DNSQuery:
             raise RuntimeError('DNS request failed: %s' % err)
         
         start_time = time.time()
-        while time.time() - start_time < self.listen_time:
+        while time.time() - start_time < self.wait_time:
             try:
                 response, address = self.sock.recvfrom(1024)
                 dns_msg = self._parse_response(response)
@@ -152,7 +157,8 @@ class DNSQuery:
         return answers
 
     def _build_request(self, qname: str, qtype: int) -> bytes:
-        id = 1234
+        if self.transaction_id == 0:
+            self.transaction_id = random.randint(1, 65535)
         flag = 0x0100
         qdcount = 1
         ancount = 0
@@ -168,7 +174,7 @@ class DNSQuery:
         # label_size = [len(i) for i in qname]
         # qname = struct.pack('>' + 'B' * len(qname), *label_size) + b''.join([bytes(part, 'utf-8') for part in qname]) + b'\x00'
 
-        header = struct.pack('>HHHHHH', id, flag, qdcount, ancount, nscount, arcount)
+        header = struct.pack('>HHHHHH', self.transaction_id, flag, qdcount, ancount, nscount, arcount)
         question = qdata + struct.pack('>HH', qtype, 1)
 
         return header + question
@@ -194,8 +200,8 @@ class DNSQuery:
 
         return parts, offset
 
-    def _parse_response(self, response) -> DNSMessage:
-        dns = DNSMessage()
+    def _parse_response(self, response) -> DNSResponse:
+        dns = DNSResponse()
         dns.id = struct.unpack('>H', response[:2])[0]
         dns.flags = struct.unpack('>H', response[2:4])[0]
         dns.questions= struct.unpack('>H', response[4:6])[0]
@@ -249,7 +255,7 @@ class DNSQuery:
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
-class DNSMessage:
+class DNSResponse:
     def __init__(self):
         self.id = None
         self.flags = None
@@ -258,6 +264,9 @@ class DNSMessage:
         self.authoritative = None
         self.additional = None
 
+    def __str__(self):
+        return f"DNSResponse(id=0x{self.id:04x}, flags=0x{self.flags:04x}, questions={self.questions}, answers=[{len(self.answers)} records], authoritative={self.authoritative}, additional={self.additional})"
+
 class DNSResourceRecord:
     def __init__(self):
         self.class_ = None
@@ -265,14 +274,38 @@ class DNSResourceRecord:
         self.type = None
         self.ttl = None
         self.data = None
-    
+
     @property
     def ipv4_address(self):
-        return  socket.inet_ntop(socket.AF_INET, self.data)
-    
+        return socket.inet_ntop(socket.AF_INET, self.data)
+
     @property
     def ipv6_address(self):
-        return  socket.inet_ntop(socket.AF_INET6, self.data)
+        return socket.inet_ntop(socket.AF_INET6, self.data)
+    
+    @property
+    def type_name(self) -> str:
+        return QTYPE_NAME.get(self.type, f'TYPE{self.type}') 
+
+    @property
+    def _data_str_preview(self) -> str:
+        if self.type == RecordType.A:
+            return self.ipv4_address
+        if self.type == RecordType.AAAA:
+            return self.ipv6_address
+        if self.type == RecordType.CNAME:
+            # 检查是否包含压缩指针 (0b11xxxxxx = 192-255)
+            try:            
+                p = self.data.index(0xc0)  # 查找压缩指针的位置
+                # print(f"！找到指针 {p} {self.data.hex()} {self.data[:p].hex()} {self.data[p:].hex()}")
+                d = self.data[:p] + b'\x00'  # 跳过压缩指针的部分以追加一个0字节用来截止解析域名
+                return decompression_message(d, d) + f'.&0x{self.data[p:].hex()}'
+            except ValueError:
+                return decompression_message(self.data, self.data) 
+        return f'0x{self.data.hex()}'
+
+    def __str__(self):
+        return f"Answer(name={self.name}, type={self.type_name}, class_={self.class_}, ttl={self.ttl}, data='{self._data_str_preview}')"
 
 def decompression_message(buff: bytes, data: bytes) -> str:
     parts = []
@@ -305,14 +338,14 @@ def main():
     parser.add_argument('domain', help='query domain')
     parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
     parser.add_argument('-q', '--query_type', type=str.upper, default='A', choices=QTYPE.keys(), help="DNS record type")
-    parser.add_argument('-t','--listen_time', type=float, default=5, help='socket listen time')
+    parser.add_argument('-t','--wait_time', type=float, default=5, help='socket reception duration in seconds')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
-    dns = DNSQuery(args.dns_server, args.listen_time)  # 设置 DNS 服务器 IP
+    dns = DNSQuery(args.dns_server, args.wait_time)  # 设置 DNS 服务器 IP及持续监听时间
     from .console import Spinner
-    has_time_arg = '-t' in sys.argv or '--listen_time' in sys.argv # 判断是否提供了 listen_time 参数
+    has_time_arg = '-t' in sys.argv or '--wait_time' in sys.argv # 判断是否提供了 wait_time 参数
     if has_time_arg:
-        with Spinner(dns, countdown=args.listen_time) as _:     # 有倒计时
+        with Spinner(dns, countdown=args.wait_time) as _:     # 有倒计时
             dns.query(args.domain, qtype=query_type(args.query_type))
     else:
         with Spinner(dns) as _:                                 # 无倒计时

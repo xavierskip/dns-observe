@@ -26,7 +26,7 @@ class MyTest(unittest.TestCase):
         for d in domains:
             d = d.strip()
             print(f"== {d} ==")
-            dns = DNSQuery(listen_time=1, timeout=1)
+            dns = DNSQuery(wait_time=1, timeout=1)
             dns.query(d)
     
     def test_type_AAAA(self):
