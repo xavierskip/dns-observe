@@ -30,7 +30,7 @@ Install and update using [pip](https://pypi.org/project/dns-observe/):
 cli
 ```
 > dns-observe -h
-usage: dns-observe [-h] [-s DNS_SERVER] [-q {A,AAAA,CNAME,TXT,HTTPS}] [-t LISTEN_TIME] [-v] domain
+usage: dns-observe [-h] [-s DNS_SERVER] [-q {A,AAAA,CNAME,TXT,HTTPS}] [-t WAIT_TIME] [--transaction-id TRANSACTION_ID] [-v] domain
 
 Observing DNS pollution
 
@@ -45,6 +45,8 @@ options:
                         DNS record type (default: A)
   -t, --wait_time WAIT_TIME
                         socket reception duration in seconds (default: 5)
+  -id, --transaction-id TRANSACTION_ID
+                        DNS transaction ID (0=random, 1-65535=fixed) (default: 0)
   -v, --version         show program's version number and exit
 ```
 
