@@ -76,7 +76,7 @@ def query_type(qtype: str) -> int:
 
 class DNSQuery:
     def __init__(self, server='1.1.1.1', wait_time=5, timeout=3, transaction_id=0):
-        self._server = server
+        self.server = server
         self.wait_time = float(wait_time)     # 设置持续监听的时间
         self.timeout = timeout                # 设置 socket 超时时间
         self.transaction_id = transaction_id  # 默认值0则随机生成 transaction ID，用户也可以指定一个固定的 ID 以便于追踪
@@ -103,7 +103,7 @@ class DNSQuery:
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.settimeout(self.timeout)
-            self.sock.sendto(qdata, (self._server, 53))
+            self.sock.sendto(qdata, (self.server, 53))
         except socket.error as err:
             raise RuntimeError('DNS request failed: %s' % err)
         
@@ -299,7 +299,7 @@ class DNSResourceRecord:
                 p = self.data.index(0xc0)  # 查找压缩指针的位置
                 # print(f"！找到指针 {p} {self.data.hex()} {self.data[:p].hex()} {self.data[p:].hex()}")
                 d = self.data[:p] + b'\x00'  # 跳过压缩指针的部分以追加一个0字节用来截止解析域名
-                return decompression_message(d, d) + f'.&0x{self.data[p:].hex()}'
+                return decompression_message(d, d) + f'.&[0x{self.data[p:].hex()}]'
             except ValueError:
                 return decompression_message(self.data, self.data) 
         return f'0x{self.data.hex()}'
@@ -330,6 +330,13 @@ def decompression_message(buff: bytes, data: bytes) -> str:
     # print(f"parts: {parts}")
     return '.'.join(map(lambda x: x.decode('utf-8'), parts))
 
+def transaction_id_type(value):
+    """验证 transaction_id 范围 1-65535，0表示随机生成"""
+    ivalue = int(value)
+    if ivalue < 1 or ivalue > 65535:
+        raise argparse.ArgumentTypeError(f"transaction_id must be 1-65535, got {value}")
+    return ivalue
+
 def main():
     parser = argparse.ArgumentParser(
         description='Observing DNS pollution',
@@ -339,9 +346,10 @@ def main():
     parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
     parser.add_argument('-q', '--query_type', type=str.upper, default='A', choices=QTYPE.keys(), help="DNS record type")
     parser.add_argument('-t','--wait_time', type=float, default=5, help='socket reception duration in seconds')
+    parser.add_argument('-id','--transaction_id', type=transaction_id_type, default=0, help='DNS transaction ID (0=random, 1-65535=fixed)')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
-    dns = DNSQuery(args.dns_server, args.wait_time)  # 设置 DNS 服务器 IP及持续监听时间
+    dns = DNSQuery(server=args.dns_server, wait_time=args.wait_time, transaction_id=args.transaction_id)  # 设置 DNS 服务器 IP及持续监听时间
     from .console import Spinner
     has_time_arg = '-t' in sys.argv or '--wait_time' in sys.argv # 判断是否提供了 wait_time 参数
     if has_time_arg:

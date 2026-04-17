@@ -20,5 +20,5 @@ responses = dns.query('vscode-sync.trafficmanager.net', RecordType.AAAA)
 print_responses(responses)
 
 dns.transaction_id = 0x1234
-responses = dns.query('twitter.com', RecordType.CNAME)
+responses = dns.query('www.twitter.com', RecordType.CNAME)
 print_responses(responses)
