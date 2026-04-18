@@ -299,7 +299,7 @@ class DNSResourceRecord:
                 p = self.data.index(0xc0)  # 查找压缩指针的位置
                 # print(f"！找到指针 {p} {self.data.hex()} {self.data[:p].hex()} {self.data[p:].hex()}")
                 d = self.data[:p] + b'\x00'  # 跳过压缩指针的部分以追加一个0字节用来截止解析域名
-                return decompression_message(d, d) + f'.&[0x{self.data[p:].hex()}]'
+                return decompression_message(d, d) + f'&[0x{self.data[p:].hex()}]'
             except ValueError:
                 return decompression_message(self.data, self.data) 
         return f'0x{self.data.hex()}'
@@ -309,24 +309,22 @@ class DNSResourceRecord:
 
 def decompression_message(buff: bytes, data: bytes) -> str:
     parts = []
-    offset = 0
-    nlen = data[offset]
+    _data = data
+    _offset = 0
+    nlen = _data[_offset]
     # print("offset", data[0], data)
     while nlen != 0:
         # print("nlen", nlen)
         if nlen & 0b11000000 == 0b11000000:
             # buff
-            (message_compression,) = struct.unpack('>H', data[offset: offset+2])
+            (message_compression,) = struct.unpack('>H', _data[_offset: _offset+2])
             _offset =  message_compression & 0b11111111111111
-            nlen = buff[_offset]
-            parts.append(buff[_offset+1:_offset+nlen+1])
-            # offset += 2
-            nlen = 0
-        else:
-            # data
-            parts.append(data[offset+1:offset+nlen+1])
-            offset += nlen + 1
-            nlen = data[offset]
+            _data = buff
+            nlen = _data[_offset]
+
+        parts.append(_data[_offset+1:_offset+nlen+1])
+        _offset += nlen + 1
+        nlen = _data[_offset]
     # print(f"parts: {parts}")
     return '.'.join(map(lambda x: x.decode('utf-8'), parts))
 
