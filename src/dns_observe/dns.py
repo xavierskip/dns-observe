@@ -258,6 +258,9 @@ class DNSQuery:
     def __str__(self):
         return f"DNSQuery(server={self.server}, duration={self.wait_time}s, id={self.transaction_id}, msg=[{len(self.stdout_msg)} messages])"
 
+    def __repr__(self):
+        return f"DNSQuery(server={self.server!r}, id={self.transaction_id!r})"
+
 class DNSResponse:
     def __init__(self):
         self.id = None
@@ -269,6 +272,9 @@ class DNSResponse:
 
     def __str__(self):
         return f"DNSResponse(id=0x{self.id:04x}, flags=0x{self.flags:04x}, questions={self.questions}, answers=[{len(self.answers)} records], authoritative={self.authoritative}, additional={self.additional})"
+
+    def __repr__(self):
+        return f"DNSResponse(id=0x{self.id:04x}, answers={len(self.answers)})"
 
 class DNSResourceRecord:
     def __init__(self):
@@ -291,7 +297,7 @@ class DNSResourceRecord:
         return QTYPE_NAME.get(self.type, f'TYPE{self.type}') 
 
     @property
-    def _data_str_preview(self) -> str:
+    def data_preview(self) -> str:
         if self.type == RecordType.A:
             return self.ipv4_address
         if self.type == RecordType.AAAA:
@@ -308,7 +314,10 @@ class DNSResourceRecord:
         return f'0x{self.data.hex()}'
 
     def __str__(self):
-        return f"Answer(name={self.name}, type={self.type_name}, class_={self.class_}, ttl={self.ttl}, data='{self._data_str_preview}')"
+        return f"Answer(name={self.name}, type={self.type_name}, class_={self.class_}, ttl={self.ttl}, data='{self.data_preview}')"
+
+    def __repr__(self):
+        return f"Answer(name={self.name!r}, type={self.type_name!r})"
 
 def decompression_message(buff: bytes, data: bytes) -> str:
     parts = []
