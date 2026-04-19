@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .parameters import REPLY_CODE
 import socket
 import struct
 import time
@@ -10,31 +11,6 @@ import random
 
 __version__ = "0.7.2"
 
-# https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
-DNS_RCODE = {
-    0:  "No Error",
-    1:  "Format Error",
-    2:  "Server Failure",
-    3:  "Non-Existent Domain",
-    4:  "Not Implemented",
-    5:  "Query Refused",
-    6:  "Name Exists when it should not",
-    7:  "RR Set Exists when it should not",
-    8:  "RR Set that should exist does not",
-    9:  "Server Not Authoritative for zone",
-    9:  "Not Authorized",
-    10: "Name not contained in zone",
-    11: "DSO-TYPE Not Implemented	",
-    16: "Bad OPT Version",
-    16: "TSIG Signature Failure",
-    17: "Key not recognized",
-    18: "Signature out of time window",
-    19: "Bad TKEY Mode",
-    20: "Duplicate key name",
-    21: "Algorithm not supported",
-    22: "Bad Truncation",
-    23: "Bad/missing Server Cookie"
-}
 # DNS query type  
 class RecordType:
     A      = 1   # IPv4
@@ -57,22 +33,6 @@ QTYPE = {
 
 # 反向查找：数值 -> 类型名称
 QTYPE_NAME = {v: k for k, v in QTYPE.items()}
-
-class UnsupportTypeError(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(message)
-
-    def __str__(self):
-        return f"'{self.message}' is unsupport type: "
-
-def query_type(qtype: str) -> int:
-        """ QTYPE: support query type
-        """
-        try:
-            return QTYPE[qtype]
-        except KeyError as exc:
-            raise UnsupportTypeError(qtype) from exc
 
 class DNSQuery:
     def __init__(self, server='1.1.1.1', wait_time=5, timeout=3, transaction_id=0):
@@ -111,27 +71,27 @@ class DNSQuery:
         while time.time() - start_time < self.wait_time:
             try:
                 response, address = self.sock.recvfrom(1024)
-                dns_msg = self._parse_response(response)
-                answers.append(dns_msg)
+                dns_resp = self._parse_response(response)
+                answers.append(dns_resp)
                 # use for stdout message
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-                if len(dns_msg.answers) == 0:
-                    code = dns_msg.flags & 0b1111
-                    reply = DNS_RCODE.get(code, 'Unassigned')
-                    stdout = f"Time: {now}, Reply code: {reply}({code}), Answer RRS: 0"
+                if len(dns_resp.answers) == 0:
+                    reply = dns_resp.reply
+                    code  = dns_resp.rcode                    
+                    stdout = f"⨯ Time: {now}, Reply: {reply}({code}), Answer: 0"
                     with self._msg_lock:
                         self.stdout_msg.append(stdout)
-                if len(dns_msg.answers) == 1:
+                if len(dns_resp.answers) == 1:
                     single = True
-                if len(dns_msg.answers) > 1:
+                if len(dns_resp.answers) > 1:
                     single = False
-                for i,answer in enumerate(dns_msg.answers):
+                for i,answer in enumerate(dns_resp.answers):
                     if single:
                         mark = '-'
                     else: # Unicode block: Box Drawing https://shapecatcher.com/unicode/block/Box_Drawing
                         if i == 0:
                             mark = '┌'
-                        elif i == len(dns_msg.answers)-1:
+                        elif i == len(dns_resp.answers)-1:
                             mark = '└'
                         else:
                             mark = '│'
@@ -269,9 +229,17 @@ class DNSResponse:
         self.answers = []
         self.authoritative = None
         self.additional = None
+    
+    @property
+    def rcode(self) -> int:
+        return self.flags & 0b1111
+
+    @property
+    def reply(self) -> str:
+        return REPLY_CODE.get(self.rcode, 'Unassigned')
 
     def __str__(self):
-        return f"DNSResponse(id=0x{self.id:04x}, flags=0x{self.flags:04x}, questions={self.questions}, answers=[{len(self.answers)} records], authoritative={self.authoritative}, additional={self.additional})"
+        return f"DNSResponse(id=0x{self.id:04x}, reply={self.reply}({self.rcode}), questions={self.questions}, answers=[{len(self.answers)} records], authoritative={self.authoritative}, additional={self.additional})"
 
     def __repr__(self):
         return f"DNSResponse(id=0x{self.id:04x}, answers={len(self.answers)})"
@@ -339,6 +307,22 @@ def decompression_message(buff: bytes, data: bytes) -> str:
         nlen = _data[_offset]
     # print(f"parts: {parts}")
     return '.'.join(map(lambda x: x.decode('utf-8'), parts))
+
+class UnsupportTypeError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+    def __str__(self):
+        return f"'{self.message}' is unsupport type: "
+
+def query_type(qtype: str) -> int:
+        """ QTYPE: support query type
+        """
+        try:
+            return QTYPE[qtype]
+        except KeyError as exc:
+            raise UnsupportTypeError(qtype) from exc
 
 def transaction_id_type(value):
     """验证 transaction_id 范围 1-65535，0表示随机生成"""

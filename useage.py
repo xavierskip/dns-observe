@@ -8,18 +8,15 @@ def print_responses(responses: list[DNSResponse]):
     
     print('---\n')
 
-dns = DNSQuery('1.1.1.1', wait_time=3)
+# custom transaction ID for dns query, useful for tracking specific queries in logs or network captures
+dns = DNSQuery('1.1.1.1', wait_time=3, transaction_id=0x666) 
 
 responses: list[DNSResponse] = dns.query("api.openai.com")
 print_responses(responses)
 
-
-# custom transaction ID for dns query, useful for tracking specific queries in logs or network captures
-dns.transaction_id = 0x666
-responses = dns.query('vscode-sync.trafficmanager.net', RecordType.AAAA)
+responses = dns.query('api.claude.ai', RecordType.AAAA)
 print_responses(responses)
 
-dns.transaction_id = 0x1234
 responses = dns.query('www.twitter.com', RecordType.CNAME)
 print_responses(responses)
 
