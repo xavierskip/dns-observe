@@ -10,7 +10,7 @@ import random
 
 __version__ = "0.7.2"
 
-# https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
+# https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
 DNS_RCODE = {
     0:  "No Error",
     1:  "Format Error",
@@ -356,7 +356,8 @@ def main():
     parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
     parser.add_argument('-q', '--query_type', type=str.upper, default='A', choices=QTYPE.keys(), help="DNS record type")
     parser.add_argument('-t','--wait_time', type=float, default=5, help='socket reception duration in seconds')
-    parser.add_argument('-id','--transaction_id', type=transaction_id_type, default=0, help='DNS transaction ID (0=random, 1-65535=fixed)')
+    parser.add_argument('-id','--transaction_id', type=transaction_id_type, default=0, help='DNS transaction ID (0=random, 1-65535=fixed),\
+                        can use in wireshark display filter like `dns.id == 0x123` to track queries')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
     dns = DNSQuery(server=args.dns_server, wait_time=args.wait_time, transaction_id=args.transaction_id)  # 设置 DNS 服务器 IP及持续监听时间
