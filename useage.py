@@ -22,3 +22,6 @@ print_responses(responses)
 dns.transaction_id = 0x1234
 responses = dns.query('www.twitter.com', RecordType.CNAME)
 print_responses(responses)
+
+for msg in dns.stdout_msg:
+    print(f'{msg}')

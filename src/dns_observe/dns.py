@@ -84,7 +84,7 @@ class DNSQuery:
         self.stdout_msg = []
         self._msg_lock = threading.Lock()
 
-    def query(self, qname: str, qtype=RecordType.A) -> list[DNSResponse]:
+    def query(self, qname: str, qtype: RecordType=RecordType.A) -> list[DNSResponse]:
         """
         向指定 DNS 服务器查询 DNS 记录
 
@@ -254,6 +254,9 @@ class DNSQuery:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
+    
+    def __str__(self):
+        return f"DNSQuery(server={self.server}, duration={self.wait_time}s, id={self.transaction_id}, msg=[{len(self.stdout_msg)} messages])"
 
 class DNSResponse:
     def __init__(self):
