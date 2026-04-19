@@ -8,7 +8,7 @@ import threading
 import sys
 import random
 
-__version__ = "0.7.1"
+__version__ = "0.7.2"
 
 # https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
 DNS_RCODE = {
