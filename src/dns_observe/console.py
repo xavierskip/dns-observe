@@ -9,7 +9,7 @@ class Spinner:
         self.countdown = float(countdown) if countdown is not None else None
         self.message = message
         self.interval = interval
-        self.chars = "⣾⣽⣻⢿⡿⣟⣯⣷"
+        self.chars = "⣷⣯⣟⡿⢿⣻⣽⣾"
         self.running = False
         self.thread = None
         self._idx = 0

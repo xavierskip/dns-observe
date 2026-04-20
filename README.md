@@ -14,13 +14,13 @@ a simple client to observe dns pollution network situation under The Great Firew
 
 | Type  | Status | Description |
 |-------|--------|-------------|
-| A     | ✅ Supported | IPv4 address records |
-| AAAA  | ✅ Supported | IPv6 address records |
-| CNAME | ✅ Supported | Canonical name records |
-| TXT   | 📝 Planned | Text records |
-| HTTPS | 📝 Planned | HTTPS service binding records |
-| NS    | 📝 Planned | Name server records |
-| MX    | 📝 Planned | Mail exchange records |
+| A     | ✅ Supported  | IPv4 address records |
+| AAAA  | ✅ Supported  | IPv6 address records |
+| CNAME | ✅ Supported  | Canonical name records |
+| TXT   | ✅ Supported  | Text records |
+| HTTPS | 🚧 incomplete | HTTPS service binding records |
+| NS    | 📝 Planned    | Name server records |
+| MX    | 📝 Planned    | Mail exchange records |
 
 ## Installing
 Install and update using [pip](https://pypi.org/project/dns-observe/):

@@ -10,7 +10,7 @@ import threading
 import sys
 import random
 
-__version__ = "0.7.2"
+__version__ = "0.7.3"
 
 # DNS query type  
 class RecordType:
@@ -82,7 +82,7 @@ class DNSQuery:
                 if len(dns_resp.answers) == 0:
                     reply = dns_resp.reply
                     code  = dns_resp.rcode                    
-                    stdout = f"⨯ Time: {now}, Reply: {reply}({code}), Answer: 0"
+                    stdout = f"⨯ Time: {now}, Reply: {reply}({code}), Answer: 0, Authority: {dns_resp.authoritative}, Additional: {dns_resp.additional}"
                     with self._msg_lock:
                         self.stdout_msg.append(stdout)
                 if len(dns_resp.answers) == 1:
@@ -106,11 +106,10 @@ class DNSQuery:
                     elif answer.type == RecordType.CNAME:
                         message = decompression_message(response, answer.data)
                         stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}"
-                    elif answer.type == RecordType.HTTPS:
-                        message = decompression_message(response, answer.data)
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, HTTPS: {message}"
+                    elif answer.type == RecordType.TXT:
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, TXT: \"{answer.data_view}\""
                     else:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, Type: {answer.type_name}, Data: {answer.data_preview}"
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, Type: {answer.type_name}, Data: \"{answer.data_view}\""
                     
                     with self._msg_lock:
                         self.stdout_msg.append(stdout)
@@ -266,10 +265,14 @@ class DNSResourceRecord:
     
     @property
     def type_name(self) -> str:
-        return QTYPE_NAME.get(self.type, f'TYPE{self.type}') 
+        return QTYPE_NAME.get(self.type, f'TYPE{self.type}')
+    
+    @property
+    def data_hex(self) -> str:
+        return f'0x{self.data.hex()}'
 
     @property
-    def data_preview(self) -> str:
+    def data_view(self) -> str:
         if self.type == RecordType.A:
             return self.ipv4_address
         if self.type == RecordType.AAAA:
@@ -282,11 +285,15 @@ class DNSResourceRecord:
                 d = self.data[:p] + b'\x00'  # 跳过压缩指针的部分以追加一个0字节用来截止解析域名
                 return decompression_message(d, d) + f'&[0x{self.data[p:].hex()}]'
             except ValueError:
-                return decompression_message(self.data, self.data) 
-        return f'0x{self.data.hex()}'
+                return decompression_message(self.data, self.data)
+        if self.type == RecordType.TXT:
+            # TXT 记录通常以一个字节表示字符串长度，后跟字符串内容
+            length = self.data[0]
+            return self.data[1:1+length].decode('utf-8')
+        return self.data_hex
 
     def __str__(self):
-        return f"Answer(name={self.name}, type={self.type_name}, class_={self.class_}, ttl={self.ttl}, data='{self.data_preview}')"
+        return f"Answer(name={self.name}, type={self.type_name}, class_={self.class_}, ttl={self.ttl}, data='{self.data_view}')"
 
     def __repr__(self):
         return f"Answer(name={self.name!r}, type={self.type_name!r})"
