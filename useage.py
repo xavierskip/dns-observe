@@ -14,11 +14,18 @@ dns = DNSQuery('1.1.1.1', wait_time=3, transaction_id=0x666)
 responses: list[DNSResponse] = dns.query("api.openai.com")
 print_responses(responses)
 
-responses = dns.query('api.claude.ai', RecordType.AAAA)
+# query with type AAAA (IPv6 address)
+responses = dns.query('api.openai.com', RecordType.AAAA)
 print_responses(responses)
 
+# query with type CNAME (canonical name record)
 responses = dns.query('www.twitter.com', RecordType.CNAME)
 print_responses(responses)
+
+# querywith type TXT (text record)
+responses = dns.query('example.com', RecordType.TXT)
+print_responses(responses)
+
 
 for msg in dns.stdout_msg:
     print(f'{msg}')

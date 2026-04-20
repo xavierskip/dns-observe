@@ -1,5 +1,6 @@
 from __future__ import annotations
 from .parameters import REPLY_CODE
+from .utils import ResponseList
 import socket
 import struct
 import time
@@ -23,12 +24,15 @@ class RecordType:
     TXT    = 16  # 任意文本信息
     HTTPS  = 65  
 
+# user argument choices for query type
 QTYPE = {
     'A'   :  RecordType.A,
     'AAAA':  RecordType.AAAA,
     'CNAME': RecordType.CNAME,
     'TXT':   RecordType.TXT,
     'HTTPS': RecordType.HTTPS,
+    'NS':    RecordType.NS,
+    'MX':    RecordType.MX,
 }
 
 # 反向查找：数值 -> 类型名称
@@ -36,10 +40,10 @@ QTYPE_NAME = {v: k for k, v in QTYPE.items()}
 
 class DNSQuery:
     def __init__(self, server='1.1.1.1', wait_time=5, timeout=3, transaction_id=0):
-        self.server = server
-        self.wait_time = float(wait_time)     # 设置持续监听的时间
-        self.timeout = timeout                # 设置 socket 超时时间
-        self.transaction_id = transaction_id  # 默认值0则随机生成 transaction ID，用户也可以指定一个固定的 ID 以便于追踪
+        self.server: str = server
+        self.wait_time: float = float(wait_time)  # 设置持续监听的时间
+        self.timeout: int = timeout  # 设置 socket 超时时间
+        self.transaction_id: int = transaction_id  # 默认值0则随机生成 transaction ID，用户也可以指定一个固定的 ID 以便于追踪
         self.sock = None
         self.stdout_msg = []
         self._msg_lock = threading.Lock()
@@ -58,7 +62,7 @@ class DNSQuery:
         Raises:
             - RuntimeError: 当 DNS 请求失败时抛出运行时错误
         """
-        answers = []
+        responses = ResponseList()
         qdata = self._build_request(qname, qtype)
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -72,7 +76,7 @@ class DNSQuery:
             try:
                 response, address = self.sock.recvfrom(1024)
                 dns_resp = self._parse_response(response)
-                answers.append(dns_resp)
+                responses.append(dns_resp)
                 # use for stdout message
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
                 if len(dns_resp.answers) == 0:
@@ -106,7 +110,7 @@ class DNSQuery:
                         message = decompression_message(response, answer.data)
                         stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, HTTPS: {message}"
                     else:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, Other Type!"
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, Type: {answer.type_name}, Data: {answer.data_preview}"
                     
                     with self._msg_lock:
                         self.stdout_msg.append(stdout)
@@ -114,7 +118,7 @@ class DNSQuery:
                 # print('{} fail'.format(time))
                 pass
         self.sock.close()
-        return answers
+        return responses
 
     def _build_request(self, qname: str, qtype: int) -> bytes:
         if self.transaction_id == 0:
@@ -160,7 +164,7 @@ class DNSQuery:
 
         return parts, offset
 
-    def _parse_response(self, response) -> DNSResponse:
+    def _parse_response(self, response: bytes) -> DNSResponse:
         dns = DNSResponse()
         dns.id = struct.unpack('>H', response[:2])[0]
         dns.flags = struct.unpack('>H', response[2:4])[0]
@@ -226,10 +230,10 @@ class DNSResponse:
         self.id = None
         self.flags = None
         self.questions = None
-        self.answers = []
+        self.answers: list[DNSResourceRecord] = []
         self.authoritative = None
         self.additional = None
-    
+
     @property
     def rcode(self) -> int:
         return self.flags & 0b1111
