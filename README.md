@@ -30,7 +30,7 @@ Install and update using [pip](https://pypi.org/project/dns-observe/):
 cli
 ```
 > dns-observe -h
-usage: dns-observe [-h] [-s DNS_SERVER] [-q {A,AAAA,CNAME,TXT,HTTPS}] [-t WAIT_TIME] [--transaction-id TRANSACTION_ID] [-v] domain
+usage: dns-observe [-h] [-s DNS_SERVER] [-q {A,AAAA,CNAME,TXT,HTTPS,NS,MX}] [-t WAIT_TIME] [-id TRANSACTION_ID] [-v] domain
 
 Observing DNS pollution
 
@@ -41,12 +41,12 @@ options:
   -h, --help            show this help message and exit
   -s, --dns_server DNS_SERVER
                         DNS server (default: 1.1.1.1)
-  -q, --query_type {A,AAAA,CNAME,TXT,HTTPS}
+  -q, --query_type {A,AAAA,CNAME,TXT,HTTPS,NS,MX}
                         DNS record type (default: A)
   -t, --wait_time WAIT_TIME
                         socket reception duration in seconds (default: 5)
-  -id, --transaction-id TRANSACTION_ID
-                        DNS transaction ID (0=random, 1-65535=fixed) (default: 0)
+  -id, --transaction_id TRANSACTION_ID
+                        DNS transaction ID (0=random, 1-65535=fixed), can use in wireshark display filter like `dns.id == 0x123` to track queries (default: 0)
   -v, --version         show program's version number and exit
 ```
 

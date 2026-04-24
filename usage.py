@@ -1,9 +1,9 @@
-from dns_observe import DNSQuery, RecordType, DNSResponse
+from dns_observe import DNSQuery, RecordType, ResponseList
 
-def print_answers(responses: list[DNSResponse]):
+def print_answers(responses: ResponseList):
     for res in responses:
         print(f'{res}')
-        for ans in res.answers:
+        for ans in res.answer_RRs:
             print(f'└ {ans}')
     
     print('---\n')
@@ -11,7 +11,7 @@ def print_answers(responses: list[DNSResponse]):
 # custom transaction ID for dns query, useful for tracking specific queries in logs or network captures
 dns = DNSQuery('1.1.1.1', wait_time=3, transaction_id=0x666) 
 
-responses: list[DNSResponse] = dns.query("api.openai.com")
+responses: ResponseList = dns.query("api.openai.com")
 print_answers(responses)
 
 # query with type AAAA (IPv6 address)
@@ -26,11 +26,11 @@ print('---\n')
 responses = dns.query('www.twitter.com', RecordType.CNAME)
 print_answers(responses)
 
-# querywith type TXT (text record)
+# query with type TXT (text record)
 responses = dns.query('example.com', RecordType.TXT)
 print_answers(responses)
 
-# querywith type HTTPS (HTTPSSVC record, RFC 7553)
+# query with type HTTPS (HTTPSSVC record, RFC 7553)
 responses = dns.query('example.com', RecordType.HTTPS)
 print_answers(responses)
 

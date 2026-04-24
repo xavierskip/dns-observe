@@ -12,6 +12,8 @@ import random
 
 __version__ = "0.7.3"
 
+_DNS_PORT = 53
+
 # DNS query type  
 class RecordType:
     A      = 1   # IPv4
@@ -48,13 +50,13 @@ class DNSQuery:
         self.stdout_msg = []
         self._msg_lock = threading.Lock()
 
-    def query(self, qname: str, qtype: RecordType=RecordType.A) -> list[DNSResponse]:
+    def query(self, qname: str, qtype: RecordType=RecordType.A) -> ResponseList:
         """
         向指定 DNS 服务器查询 DNS 记录
 
         Parameters:
             - qname(str): 查询记录的域名
-            - qtype(QueryType): 查询的记录类型，默认为 A 类型
+            - qtype(RecordType): 查询的记录类型，默认为 A 类型
 
         Returns:
             - DNSRecord: DNS 记录实例
@@ -67,7 +69,7 @@ class DNSQuery:
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.settimeout(self.timeout)
-            self.sock.sendto(qdata, (self.server, 53))
+            self.sock.sendto(qdata, (self.server, _DNS_PORT))
         except socket.error as err:
             raise RuntimeError('DNS request failed: %s' % err)
         
@@ -79,43 +81,36 @@ class DNSQuery:
                 responses.append(dns_resp)
                 # use for stdout message
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-                if len(dns_resp.answers) == 0:
+                if len(dns_resp.answer_RRs) == 0:
                     reply = dns_resp.reply
                     code  = dns_resp.rcode                    
-                    stdout = f"⨯ Time: {now}, Reply: {reply}({code}), Answer: 0, Authority: {dns_resp.authoritative}, Additional: {dns_resp.additional}"
+                    stdout = f"⨯ Time: {now}, Reply: {reply}({code}), Answer: 0, Authority: {dns_resp.authority_n}, Additional: {dns_resp.additional_n}"
                     with self._msg_lock:
                         self.stdout_msg.append(stdout)
-                if len(dns_resp.answers) == 1:
+                if len(dns_resp.answer_RRs) == 1:
                     single = True
-                if len(dns_resp.answers) > 1:
-                    single = False
-                for i,answer in enumerate(dns_resp.answers):
+                else:
+                    single = False # 如果为0，则不会进入循环，single的值无关紧要
+                for i,answer in enumerate(dns_resp.answer_RRs):
                     if single:
                         mark = '-'
                     else: # Unicode block: Box Drawing https://shapecatcher.com/unicode/block/Box_Drawing
                         if i == 0:
                             mark = '┌'
-                        elif i == len(dns_resp.answers)-1:
+                        elif i == len(dns_resp.answer_RRs)-1:
                             mark = '└'
                         else:
                             mark = '│'
-                    if answer.type == RecordType.A:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, A: {answer.ipv4_address}"
-                    elif answer.type == RecordType.AAAA:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, AAAA: {answer.ipv6_address}"
-                    elif answer.type == RecordType.CNAME:
-                        message = decompression_message(response, answer.data)
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, CNAME: {message}"
-                    elif answer.type == RecordType.TXT:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, TXT: \"{answer.data_view}\""
+                    if answer.type in QTYPE_NAME:
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, {answer.type_name}: {answer.data_view}"
                     else:
                         stdout = f"{mark} Time: {now}, Name: {answer.name}, Type: {answer.type_name}, Data: \"{answer.data_view}\""
                     
                     with self._msg_lock:
                         self.stdout_msg.append(stdout)
-            except socket.timeout as err:
+            except socket.timeout:
                 # print('{} fail'.format(time))
-                pass
+                pass # 超时是预期行为，继续监听直到 wait_time 结束
         self.sock.close()
         return responses
 
@@ -167,10 +162,10 @@ class DNSQuery:
         dns = DNSResponse()
         dns.id = struct.unpack('>H', response[:2])[0]
         dns.flags = struct.unpack('>H', response[2:4])[0]
-        dns.questions= struct.unpack('>H', response[4:6])[0]
-        answer_n = struct.unpack('>H', response[6:8])[0]
-        dns.authoritative = struct.unpack('>H', response[8:10])[0]
-        dns.additional = struct.unpack('>H', response[10:12])[0]
+        dns.questions = struct.unpack('>H', response[4:6])[0]
+        dns.answer_n = struct.unpack('>H', response[6:8])[0]
+        dns.authority_n = struct.unpack('>H', response[8:10])[0]
+        dns.additional_n = struct.unpack('>H', response[10:12])[0]
 
         # Queries
         offset = 12
@@ -183,37 +178,63 @@ class DNSQuery:
             offset += 1 + 4
 
         # print('answer length', answer_n, 'offset', offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:]]))
-        for _ in range(answer_n):
-            record = DNSResourceRecord()
-
+        for _ in range(dns.answer_n):
             # 解析域名
             name, offset = self._parse_name(response, offset)
             # print(f"record.name: {names}")
-            record.name = '.'.join(map(lambda x: x.decode('utf-8'), name))
+            record_name = '.'.join(map(lambda x: x.decode('utf-8'), name))
 
             # 解析类型和类
             # print(offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:offset+4] ]))
-            record.type, record.class_ = struct.unpack('>HH', response[offset:offset+4])
+            record_type, record_class = struct.unpack('>HH', response[offset:offset+4])
             offset += 4
             # print('record.type, record.class_',record.type, record.class_)
 
             # 解析ttl和数据长度
             # print(offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:offset+6] ]))
-            record.ttl, size = struct.unpack('>LH', response[offset:offset+6])
+            record_ttl, size = struct.unpack('>LH', response[offset:offset+6])
             offset += 6
             # print('record.ttl, size', record.ttl, size)
 
             # 解析数据
             # print(offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:offset+size] ]))
-            record.data = response[offset:offset+size]
+            record_data = response[offset:offset+size]
             offset += size
+            
+            if record_type == RecordType.A:
+                record = DNSRecordTypeA(record_name, record_type, record_class, record_ttl, record_data)
+            elif record_type == RecordType.AAAA:
+                record = DNSRecordTypeAAAA(record_name, record_type, record_class, record_ttl, record_data)
+            elif record_type == RecordType.CNAME:
+                record = DNSRecordTypeCNAME(record_name, record_type, record_class, record_ttl, record_data, response)
+            elif record_type == RecordType.TXT:
+                record = DNSRecordTypeTXT(record_name, record_type, record_class, record_ttl, record_data)
+            elif record_type == RecordType.HTTPS:
+                record = DNSRecordTypeHTTPS(record_name, record_type, record_class, record_ttl, record_data)
+            elif record_type == RecordType.NS:
+                record = DNSRecordTypeNS(record_name, record_type, record_class, record_ttl, record_data, response)
+            elif record_type == RecordType.MX:
+                record = DNSRecordTypeMX(record_name, record_type, record_class, record_ttl, record_data)
+                # record.parse_mail_exchange(response, record_data)
+            else:
+                record = DNSResourceRecord(record_name, record_type, record_class, record_ttl, record_data)
+            
+            dns.answer_RRs.append(record)
+        
+        # test: dns-observe -s a.gtld-servers.net example.com
+        for _ in range(dns.authority_n):
+            pass
 
-            dns.answers.append(record)
+        for _ in range(dns.additional_n):
+            pass
 
         return dns
     
     def close(self):
         self.sock.close()
+
+    def __enter__(self):
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
@@ -228,10 +249,13 @@ class DNSResponse:
     def __init__(self):
         self.id = None
         self.flags = None
-        self.questions = None
-        self.answers: list[DNSResourceRecord] = []
-        self.authoritative = None
-        self.additional = None
+        self.questions:int    = None
+        self.answer_n:int     = None
+        self.authority_n:int  = None
+        self.additional_n:int = None
+        self.answer_RRs:list[DNSResourceRecord]     = []
+        self.authority_RRs:list[DNSResourceRecord]  = []
+        self.additional_RRs:list[DNSResourceRecord] = []
 
     @property
     def rcode(self) -> int:
@@ -242,61 +266,92 @@ class DNSResponse:
         return REPLY_CODE.get(self.rcode, 'Unassigned')
 
     def __str__(self):
-        return f"DNSResponse(id=0x{self.id:04x}, reply={self.reply}({self.rcode}), questions={self.questions}, answers=[{len(self.answers)} records], authoritative={self.authoritative}, additional={self.additional})"
+        return f"DNSResponse(id=0x{self.id:04x}, reply='{self.reply}({self.rcode})', questions={self.questions}, answers={self.answer_n}, authoritative={self.authority_n}, additional={self.additional_n})"
 
     def __repr__(self):
-        return f"DNSResponse(id=0x{self.id:04x}, answers={len(self.answers)})"
+        return f"DNSResponse(id=0x{self.id:04x}, answers={self.answer_n})"
 
 class DNSResourceRecord:
-    def __init__(self):
-        self.class_ = None
-        self.name = None
-        self.type = None
-        self.ttl = None
-        self.data = None
-
-    @property
-    def ipv4_address(self):
-        return socket.inet_ntop(socket.AF_INET, self.data)
-
-    @property
-    def ipv6_address(self):
-        return socket.inet_ntop(socket.AF_INET6, self.data)
-    
+    def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes):
+        self.name: str = name
+        self.type: int = type_
+        self.class_: int = class_
+        self.ttl: int = ttl
+        self.data: bytes = data
+   
     @property
     def type_name(self) -> str:
         return QTYPE_NAME.get(self.type, f'TYPE{self.type}')
     
     @property
-    def data_hex(self) -> str:
-        return f'0x{self.data.hex()}'
+    def data_length(self) -> int:
+        return len(self.data)
 
     @property
+    def data_hex(self) -> str:
+        return f'0x{self.data.hex()}'
+    
+    @property
     def data_view(self) -> str:
-        if self.type == RecordType.A:
-            return self.ipv4_address
-        if self.type == RecordType.AAAA:
-            return self.ipv6_address
-        if self.type == RecordType.CNAME:
-            # 检查是否包含压缩指针 (0b11xxxxxx = 192-255)
-            try:            
-                p = self.data.index(0xc0)  # 查找压缩指针的位置
-                # print(f"！找到指针 {p} {self.data.hex()} {self.data[:p].hex()} {self.data[p:].hex()}")
-                d = self.data[:p] + b'\x00'  # 跳过压缩指针的部分以追加一个0字节用来截止解析域名
-                return decompression_message(d, d) + f'&[0x{self.data[p:].hex()}]'
-            except ValueError:
-                return decompression_message(self.data, self.data)
-        if self.type == RecordType.TXT:
-            # TXT 记录通常以一个字节表示字符串长度，后跟字符串内容
-            length = self.data[0]
-            return self.data[1:1+length].decode('utf-8')
         return self.data_hex
 
     def __str__(self):
-        return f"Answer(name={self.name}, type={self.type_name}, class_={self.class_}, ttl={self.ttl}, data='{self.data_view}')"
+        return f"Answer(name={self.name}, type={self.type_name}, class={self.class_}, ttl={self.ttl}, data='{self.data_view}')"
 
     def __repr__(self):
         return f"Answer(name={self.name!r}, type={self.type_name!r})"
+    
+class DNSRecordTypeA(DNSResourceRecord):
+    @property
+    def A(self) -> str:
+        return socket.inet_ntop(socket.AF_INET, self.data)
+    
+    @property
+    def data_view(self) -> str:
+        return self.A
+
+class DNSRecordTypeAAAA(DNSResourceRecord):
+    @property
+    def AAAA(self) -> str:
+        return socket.inet_ntop(socket.AF_INET6, self.data)
+    
+    @property
+    def data_view(self) -> str:
+        return self.AAAA
+
+class DNSRecordTypeCNAME(DNSResourceRecord):
+    def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
+        super().__init__(name, type_, class_, ttl, data)
+        self.CNAME: str = decompression_message(response, self.data)
+
+    @property
+    def data_view(self) -> str:
+        return self.CNAME
+
+class DNSRecordTypeTXT(DNSResourceRecord):
+    @property
+    def TXT(self) -> str:
+        length = self.data[0]
+        return self.data[1:1+length].decode('utf-8')
+    
+    @property
+    def data_view(self) -> str:
+        return self.TXT
+
+class DNSRecordTypeHTTPS(DNSResourceRecord):
+    pass
+
+class DNSRecordTypeNS(DNSResourceRecord):
+    def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
+        super().__init__(name, type_, class_, ttl, data)
+        self.NS: str = decompression_message(response, self.data)
+
+    @property
+    def data_view(self) -> str:
+        return self.NS
+
+class DNSRecordTypeMX(DNSResourceRecord):
+    pass
 
 def decompression_message(buff: bytes, data: bytes) -> str:
     parts = []
@@ -320,12 +375,12 @@ def decompression_message(buff: bytes, data: bytes) -> str:
     return '.'.join(map(lambda x: x.decode('utf-8'), parts))
 
 class UnsupportTypeError(Exception):
-    def __init__(self, message):
-        self.message = message
+    def __init__(self, message: str):
+        self.message: str = message
         super().__init__(message)
 
     def __str__(self):
-        return f"'{self.message}' is unsupport type: "
+        return f"Unsupported query type: '{self.message}'"
 
 def query_type(qtype: str) -> int:
         """ QTYPE: support query type
@@ -335,8 +390,11 @@ def query_type(qtype: str) -> int:
         except KeyError as exc:
             raise UnsupportTypeError(qtype) from exc
 
-def transaction_id_type(value):
-    """验证 transaction_id 范围 1-65535，0表示随机生成"""
+def transaction_id_type(value: str) -> int:
+    """
+    验证 transaction_id 范围 1-65535，0表示随机生成
+    value不能为0，就是要避免用户显式指定 0 然后又期待随机生成的歧义
+    """
     ivalue = int(value)
     if ivalue < 1 or ivalue > 65535:
         raise argparse.ArgumentTypeError(f"transaction_id must be 1-65535, got {value}")
