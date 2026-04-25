@@ -10,7 +10,7 @@ import threading
 import sys
 import random
 
-__version__ = "0.7.4"
+__version__ = "0.7.5"
 
 _DNS_PORT = 53
 
