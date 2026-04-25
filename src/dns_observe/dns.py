@@ -213,7 +213,7 @@ class DNSQuery:
             elif record_type == RecordType.TXT:
                 record = DNSRecordTypeTXT(record_name, record_type, record_class, record_ttl, record_data)
             elif record_type == RecordType.HTTPS:
-                record = DNSRecordTypeHTTPS(record_name, record_type, record_class, record_ttl, record_data)
+                record = DNSRecordTypeHTTPS(record_name, record_type, record_class, record_ttl, record_data, response)
             elif record_type == RecordType.NS:
                 record = DNSRecordTypeNS(record_name, record_type, record_class, record_ttl, record_data, response)
             elif record_type == RecordType.MX:
@@ -362,7 +362,94 @@ class DNSRecordTypeTXT(DNSResourceRecord):
         return self.TXT
 
 class DNSRecordTypeHTTPS(DNSResourceRecord):
-    pass
+    """HTTPS SVCB记录解析 (RFC 9460)"""
+
+    # SvcParam键名映射 (RFC 9460)
+    SVC_PARAM_KEYS = {
+        0: 'mandatory',
+        1: 'alpn',
+        2: 'no-default-alpn',
+        3: 'port',
+        4: 'ipv4hint',
+        5: 'ech',
+        6: 'ipv6hint',
+        7: 'dohpath',
+        8: 'ohttp',
+    }
+
+    def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
+        super().__init__(name, type_, class_, ttl, data)
+        self._response = response
+        offset = 0
+        self.priority: int = struct.unpack('>H', data[offset:offset+2])[0]
+        offset += 2
+        self.target: str = decompression_message(response, data[offset:])
+        self.target_len: int = self._calc_name_length(data[offset:])
+        offset += self.target_len
+        self.params: dict[str, str] = self._parse_svc_params(data[offset:])
+
+    def _calc_name_length(self, data: bytes) -> int:
+        """计算域名在数据中的实际长度"""
+        offset = 0
+        while offset < len(data):
+            length = data[offset]
+            if length == 0:
+                return offset + 1
+            if length & 0b11000000 == 0b11000000:
+                return offset + 2
+            offset += 1 + length
+        return len(data)
+
+    def _parse_svc_params(self, data: bytes) -> dict[str, str]:
+        params = {}
+        offset = 0
+        while offset + 4 <= len(data):
+            key = struct.unpack('>H', data[offset:offset+2])[0]
+            length = struct.unpack('>H', data[offset+2:offset+4])[0]
+            offset += 4
+            if offset + length > len(data):
+                break
+            value = data[offset:offset+length]
+            offset += length
+            param_name = self.SVC_PARAM_KEYS.get(key, f'key{key}')
+            params[param_name] = self._format_param_value(param_name, value)
+        return params
+
+    def _format_param_value(self, name: str, value: bytes) -> str:
+        if name == 'alpn':
+            alpns = []
+            offset = 0
+            while offset < len(value):
+                length = value[offset]
+                offset += 1
+                if offset + length <= len(value):
+                    alpns.append(value[offset:offset+length].decode('utf-8'))
+                    offset += length
+            return ','.join(alpns)
+        elif name == 'port':
+            return str(struct.unpack('>H', value)[0])
+        elif name == 'ipv4hint':
+            ips = [socket.inet_ntop(socket.AF_INET, value[i:i+4]) for i in range(0, len(value), 4)]
+            return ','.join(ips)
+        elif name == 'ipv6hint':
+            ips = [socket.inet_ntop(socket.AF_INET6, value[i:i+16]) for i in range(0, len(value), 16)]
+            return ','.join(ips)
+        elif name in ('dohpath', 'mandatory'):
+            return value.decode('utf-8', errors='replace')
+        elif name == 'no-default-alpn':
+            return ''
+        else:
+            return f'0x{value.hex()}'
+
+    @property
+    def data_view(self) -> str:
+        if self.priority == 0:
+            return f'alias {self.target}'
+        target_name = self.target if self.target else '<Root>'
+        parts = [str(self.priority), target_name]
+        for k, v in self.params.items():
+            parts.append(f'{k}={v}' if v else k)
+        return ' '.join(parts)
 
 class DNSRecordTypeNS(DNSResourceRecord):
     def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):

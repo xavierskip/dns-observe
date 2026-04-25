@@ -9,7 +9,7 @@ def print_answers(responses: ResponseList):
     print('---\n')
 
 # custom transaction ID for dns query, useful for tracking specific queries in logs or network captures
-dns = DNSQuery('1.1.1.1', wait_time=3, transaction_id=0x666) 
+dns = DNSQuery('1.1.1.1', wait_time=3, transaction_id=53) 
 
 responses: ResponseList = dns.query("api.openai.com")
 print_answers(responses)
