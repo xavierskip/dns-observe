@@ -19,8 +19,8 @@ a simple client to observe dns pollution network situation under The Great Firew
 | CNAME | ✅ Supported  | Canonical name records |
 | TXT   | ✅ Supported  | Text records |
 | HTTPS | 🚧 incomplete | HTTPS service binding records |
-| NS    | 📝 Planned    | Name server records |
-| MX    | 📝 Planned    | Mail exchange records |
+| NS    | ✅ Supported  | Name server records |
+| MX    | ✅ Supported  | Mail exchange records |
 
 ## Installing
 Install and update using [pip](https://pypi.org/project/dns-observe/):

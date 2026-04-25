@@ -10,21 +10,23 @@ import threading
 import sys
 import random
 
-__version__ = "0.7.3"
+__version__ = "0.7.4"
 
 _DNS_PORT = 53
 
 # DNS query type  
 class RecordType:
-    A      = 1   # IPv4
-    AAAA   = 28  # IPv6
-    CNAME  = 5   # 域名别名
-    NS     = 2   # DNS服务器地址
-    PTR    = 12  # 指针记录指向另一个名称
-    MX     = 15  # 邮件交换记录
-    SOA    = 6   # 开始授权记录
-    TXT    = 16  # 任意文本信息
-    HTTPS  = 65  
+    A      = 1   # ✅ IPv4 
+    AAAA   = 28  # ✅ IPv6 
+    CNAME  = 5   # ✅ 域名别名 
+    TXT    = 16  # ✅ 任意文本信息 
+    NS     = 2   # ✅ DNS服务器地址  
+    MX     = 15  # ✅ 邮件交换记录
+    HTTPS  = 65  # 🚧 HTTPSSVC记录，RFC 7553定义，提供HTTPS服务相关信息
+    SOA    = 6   # 📝 开始授权记录
+    PTR    = 12  # 📝 指针记录指向另一个名称
+    SRV    = 33  # 📝 服务记录，定义了某个服务的主机和端口
+    SSHFP  = 44  # 📝 SSH公钥指纹记录
 
 # user argument choices for query type
 QTYPE = {
@@ -41,8 +43,9 @@ QTYPE = {
 QTYPE_NAME = {v: k for k, v in QTYPE.items()}
 
 class DNSQuery:
-    def __init__(self, server='1.1.1.1', wait_time=5, timeout=3, transaction_id=0):
+    def __init__(self, server='1.1.1.1', port=53, wait_time=5, timeout=3, transaction_id=0):
         self.server: str = server
+        self.port: int = port
         self.wait_time: float = float(wait_time)  # 设置持续监听的时间
         self.timeout: int = timeout  # 设置 socket 超时时间
         self.transaction_id: int = transaction_id  # 默认值0则随机生成 transaction ID，用户也可以指定一个固定的 ID 以便于追踪
@@ -69,7 +72,7 @@ class DNSQuery:
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.settimeout(self.timeout)
-            self.sock.sendto(qdata, (self.server, _DNS_PORT))
+            self.sock.sendto(qdata, (self.server, self.port))
         except socket.error as err:
             raise RuntimeError('DNS request failed: %s' % err)
         
@@ -102,7 +105,7 @@ class DNSQuery:
                         else:
                             mark = '│'
                     if answer.type in QTYPE_NAME:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl}, {answer.type_name}: {answer.data_view}"
+                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl_view}, {answer.type_name}: {answer.data_view}"
                     else:
                         stdout = f"{mark} Time: {now}, Name: {answer.name}, Type: {answer.type_name}, Data: \"{answer.data_view}\""
                     
@@ -214,8 +217,7 @@ class DNSQuery:
             elif record_type == RecordType.NS:
                 record = DNSRecordTypeNS(record_name, record_type, record_class, record_ttl, record_data, response)
             elif record_type == RecordType.MX:
-                record = DNSRecordTypeMX(record_name, record_type, record_class, record_ttl, record_data)
-                # record.parse_mail_exchange(response, record_data)
+                record = DNSRecordTypeMX(record_name, record_type, record_class, record_ttl, record_data, response)
             else:
                 record = DNSResourceRecord(record_name, record_type, record_class, record_ttl, record_data)
             
@@ -239,11 +241,15 @@ class DNSQuery:
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
     
+    @property
+    def server_view(self) -> str:
+        return f"{self.server}:{self.port}" if self.port != 53 else self.server
+
     def __str__(self):
-        return f"DNSQuery(server={self.server}, duration={self.wait_time}s, id={self.transaction_id}, msg=[{len(self.stdout_msg)} messages])"
+        return f"DNSQuery(server={self.server_view}, duration={self.wait_time}s, id={self.transaction_id}, msg=[{len(self.stdout_msg)} messages])"
 
     def __repr__(self):
-        return f"DNSQuery(server={self.server!r}, id={self.transaction_id!r})"
+        return f"DNSQuery(server={self.server_view!r}, id={self.transaction_id!r})"
 
 class DNSResponse:
     def __init__(self):
@@ -286,6 +292,23 @@ class DNSResourceRecord:
     @property
     def data_length(self) -> int:
         return len(self.data)
+
+    @property
+    def ttl_view(self) -> str:
+        ttl = self.ttl
+        parts = []
+        days, ttl = divmod(ttl, 86400)
+        hours, ttl = divmod(ttl, 3600)
+        minutes, seconds = divmod(ttl, 60)
+        if days:
+            parts.append(f'{days}d')
+        if hours:
+            parts.append(f'{hours}h')
+        if minutes:
+            parts.append(f'{minutes}m')
+        if seconds or not parts:
+            parts.append(f'{seconds}s')
+        return f"{self.ttl} ({' '.join(parts)})"
 
     @property
     def data_hex(self) -> str:
@@ -351,7 +374,15 @@ class DNSRecordTypeNS(DNSResourceRecord):
         return self.NS
 
 class DNSRecordTypeMX(DNSResourceRecord):
-    pass
+    def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
+        super().__init__(name, type_, class_, ttl, data)
+        self.PRIORITY:int = struct.unpack('>H', data[:2])[0]
+        self.MAIL_EXCHANGE: str = decompression_message(response, data[2:])
+
+    @property
+    def data_view(self) -> str:
+        mx = self.MAIL_EXCHANGE if self.MAIL_EXCHANGE else '<Root>'
+        return f'({self.PRIORITY}) {mx}'
 
 def decompression_message(buff: bytes, data: bytes) -> str:
     parts = []
@@ -400,6 +431,15 @@ def transaction_id_type(value: str) -> int:
         raise argparse.ArgumentTypeError(f"transaction_id must be 1-65535, got {value}")
     return ivalue
 
+def port_type(value: str) -> int:
+    """
+    验证 port 范围 1-65535
+    """
+    ivalue = int(value)
+    if ivalue < 1 or ivalue > 65535:
+        raise argparse.ArgumentTypeError(f"port must be 1-65535, got {value}")
+    return ivalue
+
 def main():
     parser = argparse.ArgumentParser(
         description='Observing DNS pollution',
@@ -407,13 +447,14 @@ def main():
         )
     parser.add_argument('domain', help='query domain')
     parser.add_argument('-s','--dns_server', default='1.1.1.1', help='DNS server')
+    parser.add_argument('-p','--port', type=port_type, default=53, help='DNS server port')
     parser.add_argument('-q', '--query_type', type=str.upper, default='A', choices=QTYPE.keys(), help="DNS record type")
     parser.add_argument('-t','--wait_time', type=float, default=5, help='socket reception duration in seconds')
     parser.add_argument('-id','--transaction_id', type=transaction_id_type, default=0, help='DNS transaction ID (0=random, 1-65535=fixed),\
                         can use in wireshark display filter like `dns.id == 0x123` to track queries')
     parser.add_argument('-v', '--version', action='version', version=f'version: {__version__}')
     args = parser.parse_args()
-    dns = DNSQuery(server=args.dns_server, wait_time=args.wait_time, transaction_id=args.transaction_id)  # 设置 DNS 服务器 IP及持续监听时间
+    dns = DNSQuery(server=args.dns_server, port=args.port, wait_time=args.wait_time, transaction_id=args.transaction_id)  # 设置 DNS 服务器 IP及持续监听时间
     from .console import Spinner
     has_time_arg = '-t' in sys.argv or '--wait_time' in sys.argv # 判断是否提供了 wait_time 参数
     if has_time_arg:

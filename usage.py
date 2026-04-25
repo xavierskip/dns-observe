@@ -16,23 +16,35 @@ print_answers(responses)
 
 # query with type AAAA (IPv6 address)
 responses = dns.query('api.openai.com', RecordType.AAAA)
-print('fake responses:')  
+print('🤥 fake responses:')  
 print_answers(responses.fakes())           # 打印伪造的响应列表
-print('real response:')   
+print('👌 real response:')   
 print(responses.real())              # 打印真实的响应
 print('---\n')
 
-# query with type CNAME (canonical name record)
-responses = dns.query('www.twitter.com', RecordType.CNAME)
-print_answers(responses)
+with DNSQuery('8.8.8.8', wait_time=3) as dns2:
+    responses = dns2.query('www.google.com', RecordType.A)
+    print_answers(responses)
 
-# query with type TXT (text record)
-responses = dns.query('example.com', RecordType.TXT)
-print_answers(responses)
+    # query with type CNAME (canonical name record)
+    responses = dns2.query('www.twitter.com', RecordType.CNAME)
+    print_answers(responses)
 
-# query with type HTTPS (HTTPSSVC record, RFC 7553)
-responses = dns.query('example.com', RecordType.HTTPS)
-print_answers(responses)
+    # query with type TXT (text record)
+    responses = dns2.query('example.com', RecordType.TXT)
+    print_answers(responses)
 
-for msg in dns.stdout_msg:
-    print(f'{msg}')
+    # query with type HTTPS (HTTPSSVC record, RFC 7553)
+    responses = dns2.query('example.com', RecordType.HTTPS)
+    print_answers(responses)
+
+    # query with type NS (name server record)
+    responses = dns2.query('example.com', RecordType.NS)
+    print_answers(responses)
+
+    # query with type MX (mail exchange record)
+    responses = dns2.query('mails.dev', RecordType.MX)
+    print_answers(responses)
+
+    for msg in dns2.stdout_msg:
+        print(f'{msg}')
