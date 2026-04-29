@@ -10,7 +10,7 @@ import threading
 import sys
 import random
 
-__version__ = "0.7.5"
+__version__ = "0.7.6"
 
 _DNS_PORT = 53
 
@@ -37,6 +37,7 @@ QTYPE = {
     'HTTPS': RecordType.HTTPS,
     'NS':    RecordType.NS,
     'MX':    RecordType.MX,
+    'SOA':   RecordType.SOA,
 }
 
 # 反向查找：数值 -> 类型名称
@@ -87,7 +88,7 @@ class DNSQuery:
                 if len(dns_resp.answer_RRs) == 0:
                     reply = dns_resp.reply
                     code  = dns_resp.rcode                    
-                    stdout = f"⨯ Time: {now}, Reply: {reply}({code}), Answer: 0, Authority: {dns_resp.authority_n}, Additional: {dns_resp.additional_n}"
+                    stdout = f"↯ Time: {now}, Reply: {reply}({code}), Answer: 0, Authority: {dns_resp.authority_n}, Additional: {dns_resp.additional_n}"
                     with self._msg_lock:
                         self.stdout_msg.append(stdout)
                 if len(dns_resp.answer_RRs) == 1:
@@ -160,6 +161,41 @@ class DNSQuery:
                     offset += 1
 
         return parts, offset
+    
+    def _parse_record(self, response: bytes, offset: int) -> tuple[DNSResourceRecord, int]:
+            # 解析域名
+            name, offset = self._parse_name(response, offset)
+            record_name = '.'.join(map(lambda x: x.decode('utf-8'), name))
+            # 解析类型和类
+            record_type, record_class = struct.unpack('>HH', response[offset:offset+4])
+            offset += 4
+            # 解析ttl和数据长度
+            record_ttl, size = struct.unpack('>LH', response[offset:offset+6])
+            offset += 6
+            # 解析数据
+            record_data = response[offset:offset+size]
+            offset += size
+
+            if record_type == RecordType.A:
+                record = DNSRecordTypeA(record_name, record_type, record_class, record_ttl, record_data)
+            elif record_type == RecordType.AAAA:
+                record = DNSRecordTypeAAAA(record_name, record_type, record_class, record_ttl, record_data)
+            elif record_type == RecordType.CNAME:
+                record = DNSRecordTypeCNAME(record_name, record_type, record_class, record_ttl, record_data, response)
+            elif record_type == RecordType.TXT:
+                record = DNSRecordTypeTXT(record_name, record_type, record_class, record_ttl, record_data)
+            elif record_type == RecordType.HTTPS:
+                record = DNSRecordTypeHTTPS(record_name, record_type, record_class, record_ttl, record_data, response)
+            elif record_type == RecordType.NS:
+                record = DNSRecordTypeNS(record_name, record_type, record_class, record_ttl, record_data, response)
+            elif record_type == RecordType.MX:
+                record = DNSRecordTypeMX(record_name, record_type, record_class, record_ttl, record_data, response)
+            elif record_type == RecordType.SOA:
+                record = DNSRecordTypeSOA(record_name, record_type, record_class, record_ttl, record_data, response)
+            else:
+                record = DNSResourceRecord(record_name, record_type, record_class, record_ttl, record_data)
+            
+            return record, offset
 
     def _parse_response(self, response: bytes) -> DNSResponse:
         dns = DNSResponse()
@@ -182,53 +218,17 @@ class DNSQuery:
 
         # print('answer length', answer_n, 'offset', offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:]]))
         for _ in range(dns.answer_n):
-            # 解析域名
-            name, offset = self._parse_name(response, offset)
-            # print(f"record.name: {names}")
-            record_name = '.'.join(map(lambda x: x.decode('utf-8'), name))
-
-            # 解析类型和类
-            # print(offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:offset+4] ]))
-            record_type, record_class = struct.unpack('>HH', response[offset:offset+4])
-            offset += 4
-            # print('record.type, record.class_',record.type, record.class_)
-
-            # 解析ttl和数据长度
-            # print(offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:offset+6] ]))
-            record_ttl, size = struct.unpack('>LH', response[offset:offset+6])
-            offset += 6
-            # print('record.ttl, size', record.ttl, size)
-
-            # 解析数据
-            # print(offset,':',' '.join(['{:02x}'.format(b) for b in response[offset:offset+size] ]))
-            record_data = response[offset:offset+size]
-            offset += size
-            
-            if record_type == RecordType.A:
-                record = DNSRecordTypeA(record_name, record_type, record_class, record_ttl, record_data)
-            elif record_type == RecordType.AAAA:
-                record = DNSRecordTypeAAAA(record_name, record_type, record_class, record_ttl, record_data)
-            elif record_type == RecordType.CNAME:
-                record = DNSRecordTypeCNAME(record_name, record_type, record_class, record_ttl, record_data, response)
-            elif record_type == RecordType.TXT:
-                record = DNSRecordTypeTXT(record_name, record_type, record_class, record_ttl, record_data)
-            elif record_type == RecordType.HTTPS:
-                record = DNSRecordTypeHTTPS(record_name, record_type, record_class, record_ttl, record_data, response)
-            elif record_type == RecordType.NS:
-                record = DNSRecordTypeNS(record_name, record_type, record_class, record_ttl, record_data, response)
-            elif record_type == RecordType.MX:
-                record = DNSRecordTypeMX(record_name, record_type, record_class, record_ttl, record_data, response)
-            else:
-                record = DNSResourceRecord(record_name, record_type, record_class, record_ttl, record_data)
-            
+            record, offset = self._parse_record(response, offset)
             dns.answer_RRs.append(record)
         
         # test: dns-observe -s a.gtld-servers.net example.com
         for _ in range(dns.authority_n):
-            pass
+            record, offset = self._parse_record(response, offset)
+            dns.authority_RRs.append(record)
 
         for _ in range(dns.additional_n):
-            pass
+            record, offset = self._parse_record(response, offset)
+            dns.additional_RRs.append(record)
 
         return dns
     
@@ -345,7 +345,7 @@ class DNSRecordTypeAAAA(DNSResourceRecord):
 class DNSRecordTypeCNAME(DNSResourceRecord):
     def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
         super().__init__(name, type_, class_, ttl, data)
-        self.CNAME: str = decompression_message(response, self.data)
+        self.CNAME,_ = decompression_message(response, self.data)
 
     @property
     def data_view(self) -> str:
@@ -383,22 +383,9 @@ class DNSRecordTypeHTTPS(DNSResourceRecord):
         offset = 0
         self.priority: int = struct.unpack('>H', data[offset:offset+2])[0]
         offset += 2
-        self.target: str = decompression_message(response, data[offset:])
-        self.target_len: int = self._calc_name_length(data[offset:])
+        self.target, self.target_len = decompression_message(response, data[offset:])
         offset += self.target_len
         self.params: dict[str, str] = self._parse_svc_params(data[offset:])
-
-    def _calc_name_length(self, data: bytes) -> int:
-        """计算域名在数据中的实际长度"""
-        offset = 0
-        while offset < len(data):
-            length = data[offset]
-            if length == 0:
-                return offset + 1
-            if length & 0b11000000 == 0b11000000:
-                return offset + 2
-            offset += 1 + length
-        return len(data)
 
     def _parse_svc_params(self, data: bytes) -> dict[str, str]:
         params = {}
@@ -454,7 +441,7 @@ class DNSRecordTypeHTTPS(DNSResourceRecord):
 class DNSRecordTypeNS(DNSResourceRecord):
     def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
         super().__init__(name, type_, class_, ttl, data)
-        self.NS: str = decompression_message(response, self.data)
+        self.NS, _ = decompression_message(response, self.data)
 
     @property
     def data_view(self) -> str:
@@ -464,33 +451,71 @@ class DNSRecordTypeMX(DNSResourceRecord):
     def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
         super().__init__(name, type_, class_, ttl, data)
         self.PRIORITY:int = struct.unpack('>H', data[:2])[0]
-        self.MAIL_EXCHANGE: str = decompression_message(response, data[2:])
+        self.MAIL_EXCHANGE, _ = decompression_message(response, data[2:])
 
     @property
     def data_view(self) -> str:
         mx = self.MAIL_EXCHANGE if self.MAIL_EXCHANGE else '<Root>'
         return f'({self.PRIORITY}) {mx}'
 
-def decompression_message(buff: bytes, data: bytes) -> str:
+class DNSRecordTypeSOA(DNSResourceRecord):
+    def __init__(self, name: str, type_: int, class_: int, ttl: int, data: bytes, response: bytes):
+        super().__init__(name, type_, class_, ttl, data)
+        # SOA 记录格式: MNAME(域名) + RNAME(域名) + SERIAL + REFRESH + RETRY + EXPIRE + MINIMUM
+        offset = 0
+
+        # 解析 MNAME (主DNS服务器)
+        self.MNAME, mname_len = decompression_message(response, data[offset:])
+        offset += mname_len
+
+        # 解析 RNAME (管理员邮箱)
+        self.RNAME, rname_len = decompression_message(response, data[offset:])
+        offset += rname_len  
+
+        # 解析 5个32位整数
+        self.SERIAL: int = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
+        self.REFRESH: int = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
+        self.RETRY: int = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
+        self.EXPIRE: int = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
+        self.MINIMUM: int = struct.unpack('>I', data[offset:offset+4])[0]
+
+    @property
+    def data_view(self) -> str:
+        return f"{self.MNAME} {self.RNAME} {self.SERIAL} {self.REFRESH} {self.RETRY} {self.EXPIRE} {self.MINIMUM}"
+
+
+
+
+def decompression_message(buff: bytes, data: bytes) -> tuple[str, int]:
     parts = []
     _data = data
     _offset = 0
     nlen = _data[_offset]
-    # print("offset", data[0], data)
+    skip = 0
+    jump = 0
     while nlen != 0:
-        # print("nlen", nlen)
         if nlen & 0b11000000 == 0b11000000:
             # buff
             (message_compression,) = struct.unpack('>H', _data[_offset: _offset+2])
             _offset =  message_compression & 0b11111111111111
             _data = buff
             nlen = _data[_offset]
-
+            if jump == 0:  # 只有第一次遇到指针时才增加 skip，因为后续可能还有指针，skip 只计算最初的偏移量
+                skip += 1  # 指针长度为2，只增加1是因为没有指针的情况下最后还会加1
+                jump += 1
+        # 处理完压缩指针继续进入循环，此时_data和_offset已经指向了新的位置
         parts.append(_data[_offset+1:_offset+nlen+1])
+        if jump == 0:
+            skip += nlen + 1
+        # 下一个标签的长度字节
         _offset += nlen + 1
         nlen = _data[_offset]
-    # print(f"parts: {parts}")
-    return '.'.join(map(lambda x: x.decode('utf-8'), parts))
+
+    return '.'.join(map(lambda x: x.decode('utf-8'), parts)), skip+1
 
 class UnsupportTypeError(Exception):
     def __init__(self, message: str):
