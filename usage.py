@@ -60,6 +60,9 @@ with DNSQuery('a.gtld-servers.net', wait_time=3) as dns3:
     responses = dns3.query('example.com', RecordType.A)
     print_answers(responses)
 
+    for msg in dns3.stdout_msg:
+        print(f'{msg}')
+
 with DNSQuery('8.8.8.8', wait_time=3) as dns4:
     responses = dns4.query('googleapis.com', RecordType.HTTPS)
     print_answers(responses)

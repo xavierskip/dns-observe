@@ -10,7 +10,7 @@ import threading
 import sys
 import random
 
-__version__ = "0.7.6"
+__version__ = "0.8.0"
 
 _DNS_PORT = 53
 
@@ -83,40 +83,59 @@ class DNSQuery:
                 response, address = self.sock.recvfrom(1024)
                 dns_resp = self._parse_response(response)
                 responses.append(dns_resp)
-                # use for stdout message
+                # output DNS response summary
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-                if len(dns_resp.answer_RRs) == 0:
-                    reply = dns_resp.reply
-                    code  = dns_resp.rcode                    
-                    stdout = f"↯ Time: {now}, Reply: {reply}({code}), Answer: 0, Authority: {dns_resp.authority_n}, Additional: {dns_resp.additional_n}"
-                    with self._msg_lock:
-                        self.stdout_msg.append(stdout)
-                if len(dns_resp.answer_RRs) == 1:
-                    single = True
-                else:
-                    single = False # 如果为0，则不会进入循环，single的值无关紧要
-                for i,answer in enumerate(dns_resp.answer_RRs):
-                    if single:
-                        mark = '-'
-                    else: # Unicode block: Box Drawing https://shapecatcher.com/unicode/block/Box_Drawing
-                        if i == 0:
-                            mark = '┌'
-                        elif i == len(dns_resp.answer_RRs)-1:
-                            mark = '└'
-                        else:
-                            mark = '│'
-                    if answer.type in QTYPE_NAME:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, TTL: {answer.ttl_view}, {answer.type_name}: {answer.data_view}"
-                    else:
-                        stdout = f"{mark} Time: {now}, Name: {answer.name}, Type: {answer.type_name}, Data: \"{answer.data_view}\""
-                    
-                    with self._msg_lock:
-                        self.stdout_msg.append(stdout)
+                reply = dns_resp.reply
+                code  = dns_resp.rcode                    
+                stdout = f"↯ Time: {now}, Reply: {reply}({code}), Answer: {dns_resp.answer_n}, Authority: {dns_resp.authority_n}, Additional: {dns_resp.additional_n}"
+                log_msgs = self._print_resource_records(dns_resp, now)
+                with self._msg_lock:
+                    self.stdout_msg.append(stdout)
+                    self.stdout_msg.extend(log_msgs)         
             except socket.timeout:
                 # print('{} fail'.format(time))
                 pass # 超时是预期行为，继续监听直到 wait_time 结束
         self.sock.close()
         return responses
+
+    def _print_record_section(self, records: list[DNSResourceRecord], now: str, label: str = "") -> list[str]:
+        """打印一组 DNS 记录（answer/authority/additional）"""
+        if not records:
+            return []
+        single = len(records) == 1
+        stdout_msgs = []
+        for i, record in enumerate(records):
+            if single:
+                mark = '-'
+            else:
+                if i == 0:
+                    mark = '┌'
+                elif i == len(records) - 1:
+                    mark = '└'
+                else:
+                    mark = '│'
+            if record.type in QTYPE_NAME:
+                stdout = f"{mark} {label}: {record.name}, TTL: {record.ttl_view}, {record.type_name}: {record.data_view}"
+            else:
+                stdout = f"{mark} {label}: {record.name}, TTL: {record.ttl_view}, Type: {record.type_name}, Data: \"{record.data_view}\""
+            stdout_msgs.append(stdout)
+            
+        return stdout_msgs
+
+    def _print_resource_records(self, dns_resp: DNSResponse, now: str) -> list[str]:
+        """打印完整的 DNS 响应（包含 answer/authority/additional）"""
+        stdout_msgs = []
+
+        if dns_resp.answer_RRs:
+            stdout_msgs.extend(self._print_record_section(dns_resp.answer_RRs, now, label="Answer"))
+
+        if dns_resp.authority_RRs:
+            stdout_msgs.extend(self._print_record_section(dns_resp.authority_RRs, now, label="Authority"))
+
+        if dns_resp.additional_RRs:
+            stdout_msgs.extend(self._print_record_section(dns_resp.additional_RRs, now, label="Additional"))
+
+        return stdout_msgs
 
     def _build_request(self, qname: str, qtype: int) -> bytes:
         if self.transaction_id == 0:
@@ -487,9 +506,6 @@ class DNSRecordTypeSOA(DNSResourceRecord):
     def data_view(self) -> str:
         return f"{self.MNAME} {self.RNAME} {self.SERIAL} {self.REFRESH} {self.RETRY} {self.EXPIRE} {self.MINIMUM}"
 
-
-
-
 def decompression_message(buff: bytes, data: bytes) -> tuple[str, int]:
     parts = []
     _data = data
@@ -504,14 +520,18 @@ def decompression_message(buff: bytes, data: bytes) -> tuple[str, int]:
             _offset =  message_compression & 0b11111111111111
             _data = buff
             nlen = _data[_offset]
-            if jump == 0:  # 只有第一次遇到指针时才增加 skip，因为后续可能还有指针，skip 只计算最初的偏移量
-                skip += 1  # 指针长度为2，只增加1是因为没有指针的情况下最后还会加1
-                jump += 1
-        # 处理完压缩指针继续进入循环，此时_data和_offset已经指向了新的位置
+            jump += 1
+
+        # 如果经过压缩指针，此时_data和_offset已经指向了新的位置
         parts.append(_data[_offset+1:_offset+nlen+1])
-        if jump == 0:
+
+        if jump == 0:  # 没有经过压缩指针的部分
             skip += nlen + 1
-        # 下一个标签的长度字节
+        if jump == 1:  # 第一次遇到指针，且只增加一次指针的长度。
+            skip += 1  # 指针长度为2，只增加1是因为，函数末尾还会加1
+            jump += 1  # 既然已经经过指针，skip 长度将不再增加。
+
+        # 读取下一个标签做准备
         _offset += nlen + 1
         nlen = _data[_offset]
 

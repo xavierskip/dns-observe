@@ -64,7 +64,7 @@ class TestDataView(unittest.TestCase):
     def test_unsupported_type_data_view(self):
         """Test unsupported types return hex data in data_view."""
         # HTTPS type may not be widely supported but we can test the fallback
-        responses = self.dns.query('example.com', RecordType.HTTPS)
+        responses = self.dns.query('example.com', RecordType.SRV)
 
         for resp in responses:
             for ans in resp.answer_RRs:
