@@ -3,8 +3,15 @@ from dns_observe import DNSQuery, RecordType, ResponseList
 def print_answers(responses: ResponseList):
     for res in responses:
         print(f'{res}')
+        print(f'┌ Answer: {res.answer_n} RRs')
         for ans in res.answer_RRs:
             print(f'└ {ans}')
+        print(f'┌ Authority: {res.authority_n} RRs')
+        for aut in res.authority_RRs:
+            print(f'└ {aut}')
+        print(f'┌ Additional: {res.additional_n} RRs')
+        for adi in res.additional_RRs:
+            print(f'└ {adi}')
     
     print('---\n')
 
@@ -48,3 +55,11 @@ with DNSQuery('8.8.8.8', wait_time=3) as dns2:
 
     for msg in dns2.stdout_msg:
         print(f'{msg}')
+
+with DNSQuery('a.gtld-servers.net', wait_time=3) as dns3:
+    responses = dns3.query('example.com', RecordType.A)
+    print_answers(responses)
+
+with DNSQuery('8.8.8.8', wait_time=3) as dns4:
+    responses = dns4.query('googleapis.com', RecordType.HTTPS)
+    print_answers(responses)
