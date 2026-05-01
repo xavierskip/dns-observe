@@ -10,7 +10,7 @@ import threading
 import sys
 import random
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
 
 _DNS_PORT = 53
 
@@ -170,16 +170,14 @@ class DNSQuery:
                 _offset = message_compression & 0b11111111111111
                 p, _set = self._parse_name(response, _offset)  # 递归调用
                 parts.extend(p)                                # list extend
-                offset += 2
+                offset += 1
                 nlen = 0  # break
             else:
                 parts.append(response[offset+1:offset+nlen+1]) # list append
                 offset += nlen + 1
                 nlen = response[offset]
-                if nlen == 0:  # offset + 1 before break
-                    offset += 1
 
-        return parts, offset
+        return parts, offset+1
     
     def _parse_record(self, response: bytes, offset: int) -> tuple[DNSResourceRecord, int]:
             # 解析域名

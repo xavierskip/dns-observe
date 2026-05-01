@@ -24,3 +24,26 @@ data = b'\x0A\x68\x6F\x73\x74\x6D\x61\x73\x74\x65\x72\xC0\x38\x65\xf2\x8b\xbc\x0
 domain, length = decompression(buff, data)
 
 print(f"Compressed pointer: '{domain}', length={length}")
+
+# name 为空的情况
+from dns_observe import DNSQuery, DNSResourceRecord
+import struct
+buff = base64.b64decode('g9yBgAABAAIAAAABB2V4YW1wbGUDY29tAAABAAHADAABAAEAAABPAARoFBeawAwAAQABAAAATwAErEKT8wAAKQTQAAAAAAAA')
+data = buff[61:]
+print(buff)
+print(data)
+d = DNSQuery()
+name,offset = d._parse_name(buff,61)
+record_name = '.'.join(map(lambda x: x.decode('utf-8'), name))
+print(repr(record_name))
+print(buff[offset:])
+record_type, record_class = struct.unpack('>HH', buff[offset:offset+4])
+offset += 4
+# 解析ttl和数据长度
+record_ttl, size = struct.unpack('>LH', buff[offset:offset+6])
+offset += 6
+# 解析数据
+record_data = buff[offset:offset+size]
+offset += size
+record = DNSResourceRecord(record_name, record_type, record_class, record_ttl, record_data)
+print(record)
